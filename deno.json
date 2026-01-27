@@ -4,7 +4,7 @@
     "stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:push": "supabase db push",
-    "functions:serve": "supabase functions serve",
+    "functions:serve": "supabase functions serve --env-file .env.local",
     "tunnel": "ngrok http 54321",
     "lint": "deno lint",
     "fmt": "deno fmt",

@@ -203,6 +203,83 @@ To test webhooks locally, you need to expose your local Edge Functions to the in
    stripe listen --forward-to http://127.0.0.1:54321/functions/v1/webhook/stripe_production
    ```
 
+## Manual Sync
+
+You can manually trigger a sync using the `/sync` endpoint. This is useful for initial data imports or forcing a refresh.
+
+### Curl Command
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -d '{"app_key": "stripe_production", "mode": "full"}'
+```
+
+### Request Body Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app_key` | string | Yes | The app key to sync (e.g., `stripe_production`) |
+| `mode` | string | No | `full` or `incremental` (defaults to `incremental`) |
+| `resource_types` | string[] | No | Specific resources to sync (e.g., `["customer", "product"]`) |
+
+### Examples
+
+**Full sync (all resources):**
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"app_key": "stripe_production", "mode": "full"}'
+```
+
+**Incremental sync (only changes since last sync):**
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"app_key": "stripe_production", "mode": "incremental"}'
+```
+
+**Sync specific resources only:**
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"app_key": "stripe_production", "mode": "full", "resource_types": ["customer", "subscription"]}'
+```
+
+### Response
+
+A successful sync returns a JSON response with details:
+
+```json
+{
+  "success": true,
+  "app_key": "stripe_production",
+  "mode": "full",
+  "collections": [
+    {
+      "collection_key": "stripe_customer",
+      "created": 10,
+      "updated": 5,
+      "deleted": 0,
+      "errors": 0,
+      "error_messages": []
+    }
+  ],
+  "total_created": 10,
+  "total_updated": 5,
+  "total_deleted": 0,
+  "total_errors": 0,
+  "duration_ms": 1234
+}
+```
+
 ## Project Structure
 
 ```

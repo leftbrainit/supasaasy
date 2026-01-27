@@ -4,7 +4,7 @@
  * Type definitions specific to the Stripe connector.
  */
 
-import type Stripe from 'stripe';
+import type Stripe from 'npm:stripe@17';
 
 // =============================================================================
 // Resource Types

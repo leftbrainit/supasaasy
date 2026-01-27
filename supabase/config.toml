@@ -354,6 +354,10 @@ allow_dynamic_registration = false
 # Webhooks use signature verification instead of JWT authentication
 verify_jwt = false
 
+[functions.sync]
+# Sync uses ADMIN_API_KEY authentication instead of JWT
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

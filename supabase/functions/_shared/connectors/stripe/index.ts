@@ -11,7 +11,7 @@
  * - Subscription Items
  */
 
-import Stripe from 'stripe';
+import Stripe from 'npm:stripe@17';
 import type {
   AppConfig,
   ConnectorMetadata,
@@ -300,8 +300,8 @@ async function verifyWebhook(
       };
     }
 
-    // Verify the webhook signature
-    const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    // Verify the webhook signature (use async version for Deno/Edge environments)
+    const event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
 
     return {
       valid: true,
