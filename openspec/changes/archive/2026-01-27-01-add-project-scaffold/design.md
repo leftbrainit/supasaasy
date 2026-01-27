@@ -47,7 +47,7 @@ supasaasy/
 ├── supabase/
 │   ├── config.toml              # Supabase local config
 │   ├── migrations/              # Database migrations
-│   │   └── 00000000000000_init.sql
+│   │   └── 00000000000000_create_supasaasy_schema.sql
 │   └── functions/
 │       ├── _shared/             # Shared utilities
 │       │   ├── connectors/      # Connector implementations

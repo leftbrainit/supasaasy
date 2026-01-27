@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Verify formatting
+        run: deno fmt --check
+
+      - name: Run linter
+        run: deno lint
+
+      - name: Type check
+        run: |
+          # Type check shared modules
+          deno check supabase/functions/_shared/**/*.ts
+          # Type check config
+          deno check config/supasaasy.config.ts
+
+  validate-migrations:
+    name: Validate Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase local
+        run: |
+          supabase start -x realtime,storage,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: Validate migrations
+        run: |
+          supabase db reset
+          echo "Migrations validated successfully"
+
+      - name: Stop Supabase local
+        if: always()
+        run: |
+          supabase stop
