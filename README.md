@@ -80,9 +80,10 @@ const config: SupaSaaSyConfig = {
       name: 'Stripe Production',
       connector: 'stripe',
       config: {
-        webhook_secret_env: 'STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION',
         api_key_env: 'STRIPE_API_KEY_STRIPE_PRODUCTION',
-        sync_objects: ['customer', 'subscription', 'invoice'],
+        webhook_secret_env: 'STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION',
+        // Optional: specify resources to sync (defaults to all)
+        // sync_resources: ['customer', 'product', 'price', 'subscription'],
       },
     },
   ],
@@ -94,6 +95,79 @@ const config: SupaSaaSyConfig = {
     },
   ],
 };
+```
+
+## Stripe Connector Setup
+
+The Stripe connector syncs the following resources from Stripe:
+
+| Resource | Collection Key | Description |
+|----------|---------------|-------------|
+| Customers | `stripe_customer` | Stripe customer objects |
+| Products | `stripe_product` | Stripe products |
+| Prices | `stripe_price` | Stripe prices (replaces plans) |
+| Plans | `stripe_plan` | Legacy Stripe plans |
+| Subscriptions | `stripe_subscription` | Stripe subscriptions |
+| Subscription Items | `stripe_subscription_item` | Items within subscriptions |
+
+### 1. Set up environment variables
+
+```bash
+# .env or .env.local
+STRIPE_API_KEY_STRIPE_PRODUCTION=sk_live_...  # or sk_test_... for testing
+STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION=whsec_...
+```
+
+### 2. Configure the app instance
+
+In `config/supasaasy.config.ts`, add your Stripe configuration:
+
+```typescript
+{
+  app_key: 'stripe_production',
+  name: 'Stripe Production',
+  connector: 'stripe',
+  config: {
+    api_key_env: 'STRIPE_API_KEY_STRIPE_PRODUCTION',
+    webhook_secret_env: 'STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION',
+  },
+}
+```
+
+### 3. Configure Stripe webhooks
+
+In your Stripe Dashboard (Developers → Webhooks), create an endpoint with:
+
+- **URL:** `https://<your-project>.supabase.co/functions/v1/webhook/stripe_production`
+- **Events to send:**
+  - `customer.created`, `customer.updated`, `customer.deleted`
+  - `product.created`, `product.updated`, `product.deleted`
+  - `price.created`, `price.updated`, `price.deleted`
+  - `plan.created`, `plan.updated`, `plan.deleted`
+  - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+### 4. Query your data
+
+Once synced, you can query your Stripe data using the convenience views:
+
+```sql
+-- Get all active subscriptions
+SELECT * FROM supasaasy.stripe_subscriptions
+WHERE status = 'active';
+
+-- Get customer by email
+SELECT * FROM supasaasy.stripe_customers
+WHERE email = 'user@example.com';
+
+-- Get prices for a product
+SELECT * FROM supasaasy.stripe_prices
+WHERE product_id = 'prod_xxx';
+
+-- Join customers with their subscriptions
+SELECT c.email, c.name, s.status, s.current_period_end
+FROM supasaasy.stripe_customers c
+JOIN supasaasy.stripe_subscriptions s ON s.customer_id = c.external_id
+WHERE c.app_key = 'stripe_production';
 ```
 
 ## Webhook Testing with ngrok
@@ -211,14 +285,23 @@ deno fmt
 
 ## Environment Variables
 
+### Required Variables
+
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `SUPABASE_URL` | Supabase project URL | Yes |
 | `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes |
-| `SUPASAASY_ADMIN_API_KEY` | Admin API key for manual sync | Yes |
+| `ADMIN_API_KEY` | Admin API key for manual sync requests | Yes |
 
-Connector-specific variables follow the pattern `{PROVIDER}_{VARIABLE}_{APP_KEY}`.
+### Stripe Connector Variables
+
+| Variable Pattern | Description | Example |
+|-----------------|-------------|---------|
+| `STRIPE_API_KEY_{APP_KEY}` | Stripe API key | `STRIPE_API_KEY_STRIPE_PRODUCTION=sk_live_...` |
+| `STRIPE_WEBHOOK_SECRET_{APP_KEY}` | Webhook signing secret | `STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION=whsec_...` |
+
+Note: `{APP_KEY}` should be uppercase (e.g., `stripe_production` → `STRIPE_PRODUCTION`).
 
 ## License
 

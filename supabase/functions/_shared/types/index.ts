@@ -35,10 +35,10 @@ export interface AppConfig {
  *   * * * * *
  *
  * Examples:
- *   - "0 * * * *"    - Every hour at minute 0
- *   - "*/15 * * * *" - Every 15 minutes
- *   - "0 0 * * *"    - Daily at midnight
- *   - "0 2 * * 0"    - Weekly on Sunday at 2 AM
+ *   - "0 * * * *"      - Every hour at minute 0
+ *   - "0,15,30,45 * * * *" - Every 15 minutes
+ *   - "0 0 * * *"      - Daily at midnight
+ *   - "0 2 * * 0"      - Weekly on Sunday at 2 AM
  */
 export interface SyncSchedule {
   /** App key to sync */

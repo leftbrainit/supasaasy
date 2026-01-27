@@ -9,7 +9,7 @@ import { loadConfig } from '../_shared/config.ts';
 import {
   getAppConfig,
   getConnector,
-} from '../_shared/connectors/index.ts';
+} from '../_shared/connectors/init.ts';
 import {
   upsertEntity,
   deleteEntity,

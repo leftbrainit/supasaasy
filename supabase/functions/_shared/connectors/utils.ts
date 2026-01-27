@@ -5,7 +5,6 @@
  */
 
 import type {
-  AppConfig,
   EntityRow,
   NormalizedEntity,
   SupportedResource,

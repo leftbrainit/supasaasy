@@ -15,7 +15,7 @@ import {
   supportsIncrementalSync,
   type Connector,
   type IncrementalConnector,
-} from '../_shared/connectors/index.ts';
+} from '../_shared/connectors/init.ts';
 import {
   getSyncState,
   updateSyncState,
