@@ -323,3 +323,159 @@ export async function getEntity(
     return { data: null, error: err as Error };
   }
 }
+
+/**
+ * Get all entity external IDs for a given app and collection.
+ * Useful for detecting deletions during full sync.
+ *
+ * @param app_key The app instance identifier
+ * @param collection_key The collection/resource type
+ * @returns Set of external IDs
+ */
+export async function getEntityExternalIds(
+  app_key: string,
+  collection_key: string
+): Promise<{ data: Set<string> | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from('entities')
+      .select('external_id')
+      .eq('app_key', app_key)
+      .eq('collection_key', collection_key);
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    const ids = new Set((data as Array<{ external_id: string }>).map((e) => e.external_id));
+    return { data: ids, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+// =============================================================================
+// Sync State Types
+// =============================================================================
+
+/**
+ * Sync state record as stored in the database
+ */
+export interface SyncState {
+  id: string;
+  app_key: string;
+  collection_key: string;
+  last_synced_at: string;
+  last_sync_metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+// =============================================================================
+// Sync State Helper Functions
+// =============================================================================
+
+/**
+ * Get the sync state for a given app and collection.
+ *
+ * @param app_key The app instance identifier
+ * @param collection_key The collection/resource type
+ * @returns The sync state if found, null otherwise
+ */
+export async function getSyncState(
+  app_key: string,
+  collection_key: string
+): Promise<{ data: SyncState | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from('sync_state')
+      .select()
+      .eq('app_key', app_key)
+      .eq('collection_key', collection_key)
+      .maybeSingle();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncState | null, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Update the sync state for a given app and collection.
+ * Creates the record if it doesn't exist.
+ *
+ * @param app_key The app instance identifier
+ * @param collection_key The collection/resource type
+ * @param last_synced_at The timestamp of the last successful sync
+ * @param metadata Optional metadata to store (e.g., cursor)
+ * @returns The updated sync state
+ */
+export async function updateSyncState(
+  app_key: string,
+  collection_key: string,
+  last_synced_at: Date,
+  metadata?: Record<string, unknown>
+): Promise<{ data: SyncState | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from('sync_state')
+      .upsert(
+        {
+          app_key,
+          collection_key,
+          last_synced_at: last_synced_at.toISOString(),
+          last_sync_metadata: metadata ?? {},
+        },
+        {
+          onConflict: 'app_key,collection_key',
+        }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncState, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Get all sync states for a given app.
+ *
+ * @param app_key The app instance identifier
+ * @returns Array of sync states for all collections
+ */
+export async function getSyncStates(
+  app_key: string
+): Promise<{ data: SyncState[] | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from('sync_state')
+      .select()
+      .eq('app_key', app_key);
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncState[], error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}

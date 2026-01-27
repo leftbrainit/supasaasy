@@ -23,12 +23,27 @@ export interface AppConfig {
 }
 
 /**
- * Configuration for periodic sync schedules
+ * Configuration for periodic sync schedules.
+ *
+ * The schedule uses standard cron expression format:
+ *   ┌───────── minute (0 - 59)
+ *   │ ┌───────── hour (0 - 23)
+ *   │ │ ┌───────── day of month (1 - 31)
+ *   │ │ │ ┌───────── month (1 - 12)
+ *   │ │ │ │ ┌───────── day of week (0 - 6) (Sunday to Saturday)
+ *   │ │ │ │ │
+ *   * * * * *
+ *
+ * Examples:
+ *   - "0 * * * *"    - Every hour at minute 0
+ *   - "*/15 * * * *" - Every 15 minutes
+ *   - "0 0 * * *"    - Daily at midnight
+ *   - "0 2 * * 0"    - Weekly on Sunday at 2 AM
  */
 export interface SyncSchedule {
   /** App key to sync */
   app_key: string;
-  /** Cron expression for sync schedule */
+  /** Cron expression for sync schedule (see interface comment for format) */
   cron: string;
   /** Whether this schedule is enabled */
   enabled: boolean;
