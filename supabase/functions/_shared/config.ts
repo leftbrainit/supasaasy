@@ -34,6 +34,17 @@ export async function getAppConfig(appKey: string): Promise<AppConfig | undefine
 }
 
 /**
+ * Get the cached configuration synchronously.
+ * Throws if config hasn't been loaded yet via loadConfig().
+ */
+export function getConfig(): SupaSaaSyConfig {
+  if (!cachedConfig) {
+    throw new Error('Configuration not loaded. Call loadConfig() first.');
+  }
+  return cachedConfig;
+}
+
+/**
  * Clear the cached configuration (useful for testing)
  */
 export function clearConfigCache(): void {
