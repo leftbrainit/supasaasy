@@ -3,6 +3,7 @@
  *
  * Provides database connection and helper functions for Edge Functions.
  */
+// deno-lint-ignore-file no-explicit-any
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -24,7 +25,8 @@ export function getSupabaseClient(): SupabaseClient {
     throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   }
 
-  supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
+  // Correct type: provide explicit generics for schema and avoid type error
+  supabaseClient = createClient<any, 'supasaasy', any>(supabaseUrl, supabaseServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
