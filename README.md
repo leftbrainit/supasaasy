@@ -101,14 +101,14 @@ const config: SupaSaaSyConfig = {
 
 The Stripe connector syncs the following resources from Stripe:
 
-| Resource | Collection Key | Description |
-|----------|---------------|-------------|
-| Customers | `stripe_customer` | Stripe customer objects |
-| Products | `stripe_product` | Stripe products |
-| Prices | `stripe_price` | Stripe prices (replaces plans) |
-| Plans | `stripe_plan` | Legacy Stripe plans |
-| Subscriptions | `stripe_subscription` | Stripe subscriptions |
-| Subscription Items | `stripe_subscription_item` | Items within subscriptions |
+| Resource           | Collection Key             | Description                    |
+| ------------------ | -------------------------- | ------------------------------ |
+| Customers          | `stripe_customer`          | Stripe customer objects        |
+| Products           | `stripe_product`           | Stripe products                |
+| Prices             | `stripe_price`             | Stripe prices (replaces plans) |
+| Plans              | `stripe_plan`              | Legacy Stripe plans            |
+| Subscriptions      | `stripe_subscription`      | Stripe subscriptions           |
+| Subscription Items | `stripe_subscription_item` | Items within subscriptions     |
 
 ### 1. Set up environment variables
 
@@ -218,11 +218,11 @@ curl -X POST http://127.0.0.1:54321/functions/v1/sync \
 
 ### Request Body Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `app_key` | string | Yes | The app key to sync (e.g., `stripe_production`) |
-| `mode` | string | No | `full` or `incremental` (defaults to `incremental`) |
-| `resource_types` | string[] | No | Specific resources to sync (e.g., `["customer", "product"]`) |
+| Parameter        | Type     | Required | Description                                                  |
+| ---------------- | -------- | -------- | ------------------------------------------------------------ |
+| `app_key`        | string   | Yes      | The app key to sync (e.g., `stripe_production`)              |
+| `mode`           | string   | No       | `full` or `incremental` (defaults to `incremental`)          |
+| `resource_types` | string[] | No       | Specific resources to sync (e.g., `["customer", "product"]`) |
 
 ### Examples
 
@@ -339,6 +339,7 @@ deno run --allow-read --allow-write scripts/assemble-migrations.ts
 This generates/updates `supabase/migrations/99999999999999_connector_migrations.sql`.
 
 **Important:** The generated file is committed to the repository. Regenerate it whenever you:
+
 - Add or remove connectors from your configuration
 - Update connector migration files
 
@@ -417,18 +418,18 @@ deno fmt
 
 ### Required Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | Supabase project URL | Yes |
-| `SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes |
-| `ADMIN_API_KEY` | Admin API key for manual sync requests | Yes |
+| Variable                    | Description                            | Required |
+| --------------------------- | -------------------------------------- | -------- |
+| `SUPABASE_URL`              | Supabase project URL                   | Yes      |
+| `SUPABASE_ANON_KEY`         | Supabase anonymous key                 | Yes      |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key              | Yes      |
+| `ADMIN_API_KEY`             | Admin API key for manual sync requests | Yes      |
 
 ### Stripe Connector Variables
 
-| Variable Pattern | Description | Example |
-|-----------------|-------------|---------|
-| `STRIPE_API_KEY_{APP_KEY}` | Stripe API key | `STRIPE_API_KEY_STRIPE_PRODUCTION=sk_live_...` |
+| Variable Pattern                  | Description            | Example                                             |
+| --------------------------------- | ---------------------- | --------------------------------------------------- |
+| `STRIPE_API_KEY_{APP_KEY}`        | Stripe API key         | `STRIPE_API_KEY_STRIPE_PRODUCTION=sk_live_...`      |
 | `STRIPE_WEBHOOK_SECRET_{APP_KEY}` | Webhook signing secret | `STRIPE_WEBHOOK_SECRET_STRIPE_PRODUCTION=whsec_...` |
 
 Note: `{APP_KEY}` should be uppercase (e.g., `stripe_production` → `STRIPE_PRODUCTION`).

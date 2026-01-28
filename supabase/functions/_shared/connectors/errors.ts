@@ -16,7 +16,7 @@ export class ConnectorError extends Error {
   constructor(
     message: string,
     connector: string,
-    retryable = false
+    retryable = false,
   ) {
     super(message);
     this.name = 'ConnectorError';
@@ -34,7 +34,7 @@ export class WebhookVerificationError extends ConnectorError {
 
   constructor(
     connector: string,
-    reason: string
+    reason: string,
   ) {
     super(`Webhook verification failed: ${reason}`, connector, false);
     this.name = 'WebhookVerificationError';
@@ -54,12 +54,12 @@ export class RateLimitError extends ConnectorError {
   constructor(
     connector: string,
     retryAfterSeconds: number,
-    message?: string
+    message?: string,
   ) {
     super(
       message || `Rate limit exceeded, retry after ${retryAfterSeconds}s`,
       connector,
-      true
+      true,
     );
     this.name = 'RateLimitError';
     this.retryAfterSeconds = retryAfterSeconds;
@@ -80,7 +80,7 @@ export class ApiError extends ConnectorError {
     connector: string,
     message: string,
     statusCode?: number,
-    response?: unknown
+    response?: unknown,
   ) {
     // 5xx errors and some 4xx are typically retryable
     const retryable = statusCode
@@ -106,12 +106,12 @@ export class EntityNotFoundError extends ConnectorError {
   constructor(
     connector: string,
     externalId: string,
-    resourceType: string
+    resourceType: string,
   ) {
     super(
       `Entity not found: ${resourceType}/${externalId}`,
       connector,
-      false
+      false,
     );
     this.name = 'EntityNotFoundError';
     this.externalId = externalId;
@@ -132,12 +132,12 @@ export class NormalizationError extends ConnectorError {
     connector: string,
     resourceType: string,
     message: string,
-    field?: string
+    field?: string,
   ) {
     super(
       `Normalization failed for ${resourceType}: ${message}`,
       connector,
-      false
+      false,
     );
     this.name = 'NormalizationError';
     this.resourceType = resourceType;
@@ -155,7 +155,7 @@ export class ConfigurationError extends ConnectorError {
   constructor(
     connector: string,
     message: string,
-    field?: string
+    field?: string,
   ) {
     super(message, connector, false);
     this.name = 'ConfigurationError';

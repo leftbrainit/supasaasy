@@ -6,21 +6,14 @@
  */
 
 import { loadConfig } from '../_shared/config.ts';
+import { getAppConfig, getConnector } from '../_shared/connectors/init.ts';
 import {
-  getAppConfig,
-  getConnector,
-} from '../_shared/connectors/init.ts';
-import {
-  upsertEntity,
-  upsertEntities,
   deleteEntity,
+  upsertEntities,
+  upsertEntity,
   type UpsertEntityData,
 } from '../_shared/db.ts';
-import type {
-  AppConfig,
-  NormalizedEntity,
-  ParsedWebhookEvent,
-} from '../_shared/types/index.ts';
+import type { AppConfig, NormalizedEntity, ParsedWebhookEvent } from '../_shared/types/index.ts';
 
 // =============================================================================
 // Response Helpers
@@ -34,7 +27,7 @@ const CORS_HEADERS = {
 
 function jsonResponse(
   data: Record<string, unknown>,
-  status: number
+  status: number,
 ): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -101,7 +94,7 @@ function toUpsertData(entity: NormalizedEntity): UpsertEntityData {
 async function processWebhookEvent(
   event: ParsedWebhookEvent,
   entity: NormalizedEntity | null,
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): Promise<{ action: string; error?: Error }> {
   // For delete events, we don't need entity data
   if (event.eventType === 'delete') {
@@ -112,14 +105,14 @@ async function processWebhookEvent(
 
     // Get collection_key from connector metadata
     const resource = connector.metadata.supportedResources.find(
-      (r) => r.resourceType === event.resourceType
+      (r) => r.resourceType === event.resourceType,
     );
     const collectionKey = resource?.collectionKey ?? event.resourceType;
 
     const result = await deleteEntity(
       appConfig.app_key,
       collectionKey,
-      event.externalId
+      event.externalId,
     );
 
     if (result.error) {
@@ -158,7 +151,7 @@ async function processWebhookEvent(
 async function processWebhookEntities(
   event: ParsedWebhookEvent,
   entities: NormalizedEntity[],
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): Promise<{ action: string; count: number; error?: Error }> {
   // For delete events, we don't need entity data
   if (event.eventType === 'delete') {
@@ -169,14 +162,14 @@ async function processWebhookEntities(
 
     // Get collection_key from connector metadata
     const resource = connector.metadata.supportedResources.find(
-      (r) => r.resourceType === event.resourceType
+      (r) => r.resourceType === event.resourceType,
     );
     const collectionKey = resource?.collectionKey ?? event.resourceType;
 
     const result = await deleteEntity(
       appConfig.app_key,
       collectionKey,
-      event.externalId
+      event.externalId,
     );
 
     if (result.error) {
@@ -267,18 +260,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       console.error(`Webhook verification failed: ${verificationResult.reason}`);
       return errorResponse(
         verificationResult.reason || 'Webhook verification failed',
-        401
+        401,
       );
     }
 
     // Parse the webhook event
     const event = await connector.parseWebhookEvent(
       verificationResult.payload,
-      appConfig
+      appConfig,
     );
 
     console.log(
-      `Webhook event: ${event.originalEventType} -> ${event.eventType} for ${event.resourceType}:${event.externalId}`
+      `Webhook event: ${event.originalEventType} -> ${event.eventType} for ${event.resourceType}:${event.externalId}`,
     );
 
     // Extract and normalize entity data
@@ -286,7 +279,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // Otherwise fall back to extractEntity for single entity
     if (connector.extractEntities) {
       const entities = await connector.extractEntities(event, appConfig);
-      
+
       console.log(`Extracted ${entities.length} entity(ies) from webhook`);
 
       // Process all entities
@@ -298,7 +291,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       console.log(
-        `Webhook processed successfully: ${result.action} ${result.count} entity(ies) for ${event.resourceType}:${event.externalId}`
+        `Webhook processed successfully: ${result.action} ${result.count} entity(ies) for ${event.resourceType}:${event.externalId}`,
       );
 
       return successResponse({
@@ -321,7 +314,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     console.log(
-      `Webhook processed successfully: ${result.action} for ${event.resourceType}:${event.externalId}`
+      `Webhook processed successfully: ${result.action} for ${event.resourceType}:${event.externalId}`,
     );
 
     return successResponse({

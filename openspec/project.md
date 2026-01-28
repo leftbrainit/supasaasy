@@ -5,6 +5,7 @@
 SupaSaaSy is an open-source framework that synchronizes data from popular SaaS business applications into a Supabase (Postgres) database. It supports both low-latency ingestion via webhooks and configurable periodic synchronization via APIs, enabling businesses to maintain an up-to-date, unified data layer across their tools.
 
 **Goals:**
+
 - Provide a reliable, self-hosted data sync layer from SaaS apps into Supabase
 - Support realtime updates via webhooks with eventual consistency via periodic syncs
 - Offer a consistent connector interface for multiple SaaS applications
@@ -80,18 +81,22 @@ SupaSaaSy is an open-source framework that synchronizes data from popular SaaS b
 ## External Dependencies
 
 **Phase 1 - Stripe:**
+
 - Stripe API & Webhooks
 - Supported resources: Customers, Products, Prices, Plans, Subscriptions, Subscription Items
 - Excluded (Phase 1): Invoices, PaymentIntents, Charges
 
 **Phase 2 - Intercom:**
+
 - Validates multi-connector architecture
 
 **Future:**
+
 - Notion
 - Slack
 
 **Infrastructure:**
+
 - Supabase (Database, Edge Functions, Secrets Management)
 - GitHub Actions (CI/CD)
 - ngrok (optional, local webhook testing)

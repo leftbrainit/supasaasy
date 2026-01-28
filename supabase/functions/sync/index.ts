@@ -10,21 +10,14 @@
 
 import { loadConfig } from '../_shared/config.ts';
 import {
+  type Connector,
   getAppConfig,
   getConnector,
-  supportsIncrementalSync,
-  type Connector,
   type IncrementalConnector,
+  supportsIncrementalSync,
 } from '../_shared/connectors/init.ts';
-import {
-  getSyncState,
-  updateSyncState,
-} from '../_shared/db.ts';
-import type {
-  AppConfig,
-  SyncOptions,
-  SyncResult,
-} from '../_shared/types/index.ts';
+import { getSyncState, updateSyncState } from '../_shared/db.ts';
+import type { AppConfig, SyncOptions, SyncResult } from '../_shared/types/index.ts';
 
 // =============================================================================
 // Types
@@ -71,7 +64,7 @@ const CORS_HEADERS = {
 
 function jsonResponse(
   data: Record<string, unknown>,
-  status: number
+  status: number,
 ): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -134,7 +127,7 @@ async function syncCollection(
   collectionKey: string,
   resourceType: string,
   mode: SyncMode,
-  sinceDatetime?: Date
+  sinceDatetime?: Date,
 ): Promise<CollectionSyncResult> {
   const result: CollectionSyncResult = {
     collection_key: collectionKey,
@@ -155,11 +148,13 @@ async function syncCollection(
 
     if (mode === 'incremental' && sinceDatetime && supportsIncrementalSync(connector)) {
       // Incremental sync
-      console.log(`Running incremental sync for ${collectionKey} since ${sinceDatetime.toISOString()}`);
+      console.log(
+        `Running incremental sync for ${collectionKey} since ${sinceDatetime.toISOString()}`,
+      );
       syncResult = await (connector as IncrementalConnector).incrementalSync(
         appConfig,
         sinceDatetime,
-        syncOptions
+        syncOptions,
       );
     } else {
       // Full sync
@@ -184,7 +179,7 @@ async function syncCollection(
         appConfig.app_key,
         collectionKey,
         syncStartTime,
-        { mode, lastCursor: syncResult.nextCursor }
+        { mode, lastCursor: syncResult.nextCursor },
       );
 
       if (stateError) {
@@ -208,7 +203,7 @@ async function syncCollection(
 async function syncApp(
   appConfig: AppConfig,
   mode: SyncMode,
-  resourceTypes?: string[]
+  resourceTypes?: string[],
 ): Promise<Omit<SyncResponse, 'duration_ms'>> {
   const connector = await getConnector(appConfig.connector);
   if (!connector) {
@@ -223,7 +218,7 @@ async function syncApp(
 
   // Get supported resources from connector metadata
   const supportedResources = connector.metadata.supportedResources;
-  
+
   // Filter to requested resource types if specified
   const resourcesToSync = resourceTypes
     ? supportedResources.filter((r) => resourceTypes.includes(r.resourceType))
@@ -237,18 +232,22 @@ async function syncApp(
     if (mode === 'incremental') {
       // Check if connector and resource support incremental sync
       if (!resource.supportsIncrementalSync || !supportsIncrementalSync(connector)) {
-        console.log(`Resource ${resource.resourceType} does not support incremental sync, using full`);
+        console.log(
+          `Resource ${resource.resourceType} does not support incremental sync, using full`,
+        );
         actualMode = 'full';
       } else {
         // Get last sync timestamp
         const { data: syncState } = await getSyncState(
           appConfig.app_key,
-          resource.collectionKey
+          resource.collectionKey,
         );
 
         if (syncState) {
           sinceDatetime = new Date(syncState.last_synced_at);
-          console.log(`Found sync state for ${resource.collectionKey}: ${sinceDatetime.toISOString()}`);
+          console.log(
+            `Found sync state for ${resource.collectionKey}: ${sinceDatetime.toISOString()}`,
+          );
         } else {
           console.log(`No sync state for ${resource.collectionKey}, falling back to full sync`);
           actualMode = 'full';
@@ -262,7 +261,7 @@ async function syncApp(
       resource.collectionKey,
       resource.resourceType,
       actualMode,
-      sinceDatetime
+      sinceDatetime,
     );
 
     collections.push(result);
@@ -343,7 +342,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const duration = Date.now() - startTime;
     console.log(
-      `Sync completed for ${appKey}: created=${result.total_created}, updated=${result.total_updated}, deleted=${result.total_deleted}, errors=${result.total_errors}, duration=${duration}ms`
+      `Sync completed for ${appKey}: created=${result.total_created}, updated=${result.total_updated}, deleted=${result.total_deleted}, errors=${result.total_errors}, duration=${duration}ms`,
     );
 
     return successResponse({

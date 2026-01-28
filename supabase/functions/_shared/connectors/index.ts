@@ -32,7 +32,7 @@ export interface WebhookHandler {
    */
   verifyWebhook(
     request: Request,
-    config: AppConfig
+    config: AppConfig,
   ): Promise<WebhookVerificationResult>;
 
   /**
@@ -43,7 +43,7 @@ export interface WebhookHandler {
    */
   parseWebhookEvent(
     payload: unknown,
-    config: AppConfig
+    config: AppConfig,
   ): Promise<ParsedWebhookEvent>;
 
   /**
@@ -54,7 +54,7 @@ export interface WebhookHandler {
    */
   extractEntity(
     event: ParsedWebhookEvent,
-    config: AppConfig
+    config: AppConfig,
   ): Promise<NormalizedEntity | null>;
 
   /**
@@ -67,7 +67,7 @@ export interface WebhookHandler {
    */
   extractEntities?(
     event: ParsedWebhookEvent,
-    config: AppConfig
+    config: AppConfig,
   ): Promise<NormalizedEntity[]>;
 }
 
@@ -98,7 +98,7 @@ export interface IncrementalSyncHandler {
   incrementalSync(
     config: AppConfig,
     since: Date,
-    options?: SyncOptions
+    options?: SyncOptions,
   ): Promise<SyncResult>;
 }
 
@@ -119,7 +119,7 @@ export interface Connector extends WebhookHandler, SyncHandler {
   normalizeEntity(
     resourceType: string,
     data: Record<string, unknown>,
-    config: AppConfig
+    config: AppConfig,
   ): NormalizedEntity;
 }
 
@@ -132,7 +132,7 @@ export interface IncrementalConnector extends Connector, IncrementalSyncHandler 
  * Type guard to check if a connector supports incremental sync
  */
 export function supportsIncrementalSync(
-  connector: Connector
+  connector: Connector,
 ): connector is IncrementalConnector {
   return 'incrementalSync' in connector;
 }
@@ -159,7 +159,7 @@ const connectorCache = new Map<string, Connector>();
  */
 export function registerConnector(
   name: string,
-  factory: ConnectorFactory
+  factory: ConnectorFactory,
 ): void {
   if (connectorRegistry.has(name)) {
     console.warn(`Connector '${name}' is already registered, overwriting`);
@@ -198,7 +198,7 @@ export async function getConnector(name: string): Promise<Connector | undefined>
  * @returns The connector instance or undefined if not found
  */
 export async function getConnectorForAppKey(
-  appKey: string
+  appKey: string,
 ): Promise<Connector | undefined> {
   const config = getConfig();
   const appConfig = config.apps.find((app) => app.app_key === appKey);
@@ -211,7 +211,7 @@ export async function getConnectorForAppKey(
   const connector = await getConnector(appConfig.connector);
   if (!connector) {
     console.error(
-      `No connector registered for provider: ${appConfig.connector}`
+      `No connector registered for provider: ${appConfig.connector}`,
     );
     return undefined;
   }

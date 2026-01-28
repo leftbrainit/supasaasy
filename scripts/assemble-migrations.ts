@@ -15,7 +15,7 @@
  * 3. Generates supabase/migrations/99999999999999_connector_migrations.sql
  */
 
-import { join, dirname, fromFileUrl } from 'https://deno.land/std@0.208.0/path/mod.ts';
+import { dirname, fromFileUrl, join } from 'https://deno.land/std@0.208.0/path/mod.ts';
 import { exists } from 'https://deno.land/std@0.208.0/fs/exists.ts';
 
 // =============================================================================
@@ -26,7 +26,12 @@ const SCRIPT_DIR = dirname(fromFileUrl(import.meta.url));
 const PROJECT_ROOT = join(SCRIPT_DIR, '..');
 const CONFIG_PATH = join(PROJECT_ROOT, 'config', 'supasaasy.config.ts');
 const CONNECTORS_DIR = join(PROJECT_ROOT, 'supabase', 'functions', '_shared', 'connectors');
-const OUTPUT_PATH = join(PROJECT_ROOT, 'supabase', 'migrations', '99999999999999_connector_migrations.sql');
+const OUTPUT_PATH = join(
+  PROJECT_ROOT,
+  'supabase',
+  'migrations',
+  '99999999999999_connector_migrations.sql',
+);
 
 // =============================================================================
 // Types
@@ -106,7 +111,7 @@ async function readMigrationFile(connectorName: string, filename: string): Promi
 function generateHeader(connectors: string[]): string {
   const timestamp = new Date().toISOString();
   const connectorList = connectors.length > 0
-    ? connectors.map(c => `--   - ${c}`).join('\n')
+    ? connectors.map((c) => `--   - ${c}`).join('\n')
     : '--   (none)';
 
   return `-- ============================================================================
@@ -169,7 +174,9 @@ async function assembleMigrations(): Promise<void> {
 
   // Get configured connectors
   const connectors = getConfiguredConnectors(config);
-  console.log(`Configured connectors: ${connectors.length > 0 ? connectors.join(', ') : '(none)'}\n`);
+  console.log(
+    `Configured connectors: ${connectors.length > 0 ? connectors.join(', ') : '(none)'}\n`,
+  );
 
   // Start building the output
   let output = generateHeader(connectors);

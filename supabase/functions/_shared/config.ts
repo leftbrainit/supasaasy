@@ -4,7 +4,7 @@
  * Loads and validates SupaSaaSy configuration at runtime.
  */
 
-import type { SupaSaaSyConfig, AppConfig } from './types/index.ts';
+import type { AppConfig, SupaSaaSyConfig } from './types/index.ts';
 
 let cachedConfig: SupaSaaSyConfig | null = null;
 

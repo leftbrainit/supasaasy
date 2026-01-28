@@ -22,7 +22,9 @@ export function getSupabaseClient(): SupabaseClient {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error(
+      'Missing required environment variables: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+    );
   }
 
   // Correct type: provide explicit generics for schema and avoid type error
@@ -44,7 +46,7 @@ export function getSupabaseClient(): SupabaseClient {
  */
 export async function query<T = unknown>(
   sql: string,
-  params?: unknown[]
+  params?: unknown[],
 ): Promise<{ data: T[] | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -163,7 +165,7 @@ export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult
         },
         {
           onConflict: 'app_key,collection_key,external_id',
-        }
+        },
       )
       .select()
       .single();
@@ -185,7 +187,7 @@ export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult
  * @returns Array of upserted entities
  */
 export async function upsertEntities(
-  entities: UpsertEntityData[]
+  entities: UpsertEntityData[],
 ): Promise<{ data: Entity[] | null; error: Error | null }> {
   if (entities.length === 0) {
     return { data: [], error: null };
@@ -232,7 +234,7 @@ export async function upsertEntities(
 export async function deleteEntity(
   app_key: string,
   collection_key: string,
-  external_id: string
+  external_id: string,
 ): Promise<DeleteResult> {
   const client = getSupabaseClient();
 
@@ -264,7 +266,7 @@ export async function deleteEntity(
  */
 export async function deleteEntities(
   app_key: string,
-  collection_key?: string
+  collection_key?: string,
 ): Promise<DeleteResult> {
   const client = getSupabaseClient();
 
@@ -301,7 +303,7 @@ export async function deleteEntities(
 export async function getEntity(
   app_key: string,
   collection_key: string,
-  external_id: string
+  external_id: string,
 ): Promise<{ data: Entity | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -334,7 +336,7 @@ export async function getEntity(
  */
 export async function getEntityExternalIds(
   app_key: string,
-  collection_key: string
+  collection_key: string,
 ): Promise<{ data: Set<string> | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -369,7 +371,7 @@ export async function getEntityExternalIds(
 export async function getEntityExternalIdsCreatedAfter(
   app_key: string,
   collection_key: string,
-  createdGte: number
+  createdGte: number,
 ): Promise<{ data: Set<string> | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -391,7 +393,7 @@ export async function getEntityExternalIdsCreatedAfter(
           const created = e.raw_payload?.created;
           return typeof created === 'number' && created >= createdGte;
         })
-        .map((e) => e.external_id)
+        .map((e) => e.external_id),
     );
 
     return { data: ids, error: null };
@@ -430,7 +432,7 @@ export interface SyncState {
  */
 export async function getSyncState(
   app_key: string,
-  collection_key: string
+  collection_key: string,
 ): Promise<{ data: SyncState | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -466,7 +468,7 @@ export async function updateSyncState(
   app_key: string,
   collection_key: string,
   last_synced_at: Date,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
 ): Promise<{ data: SyncState | null; error: Error | null }> {
   const client = getSupabaseClient();
 
@@ -482,7 +484,7 @@ export async function updateSyncState(
         },
         {
           onConflict: 'app_key,collection_key',
-        }
+        },
       )
       .select()
       .single();
@@ -504,7 +506,7 @@ export async function updateSyncState(
  * @returns Array of sync states for all collections
  */
 export async function getSyncStates(
-  app_key: string
+  app_key: string,
 ): Promise<{ data: SyncState[] | null; error: Error | null }> {
   const client = getSupabaseClient();
 

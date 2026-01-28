@@ -1,11 +1,14 @@
 ## Context
+
 SupaSaaSy is a Supabase-native data sync framework. The project structure must support:
+
 - Deno-based Edge Functions (webhooks, sync functions)
 - PostgreSQL migrations
 - Multiple connector implementations
 - Local development with full Supabase stack
 
 ## Goals / Non-Goals
+
 - **Goals:**
   - Establish consistent, idiomatic Supabase project structure
   - Enable local development with `supabase start`
@@ -20,23 +23,29 @@ SupaSaaSy is a Supabase-native data sync framework. The project structure must s
 ## Decisions
 
 ### Decision: Use Supabase CLI as primary tooling
+
 Standard Supabase CLI provides all required functionality for local development, migrations, and Edge Function deployment. No custom build system needed.
 
 **Alternatives considered:**
+
 - Custom Deno build pipeline: Rejected—adds complexity without benefit
 - Turborepo/monorepo tooling: Rejected—overkill for single-project scope
 
 ### Decision: Single configuration file in TypeScript
+
 Use `supasaasy.config.ts` for type-safe configuration of app instances and sync schedules.
 
 **Alternatives considered:**
+
 - JSON/YAML config: Rejected—loses type safety and IDE support
 - Environment variables only: Rejected—complex configurations become unwieldy
 
 ### Decision: Shared code in `_shared/` directory
+
 Edge Functions can import from `_shared/` directory within `supabase/functions/`.
 
 **Alternatives considered:**
+
 - NPM packages: Rejected—adds complexity, Deno import maps are sufficient
 - Duplicated code per function: Rejected—violates DRY
 
@@ -79,4 +88,5 @@ supasaasy/
   - Mitigation: Keep imports simple, use Supabase-blessed patterns
 
 ## Open Questions
+
 - None blocking for initial scaffold

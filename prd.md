@@ -2,8 +2,8 @@
 
 ## 1. Overview
 
-**Project name:** SupaSaaSy  
-**Repository:** `leftbrainit/supasaasy`  
+**Project name:** SupaSaaSy\
+**Repository:** `leftbrainit/supasaasy`\
 **Type:** Open source (self‑hosted, Supabase‑native)
 
 SupaSaaSy is an open‑source framework that synchronizes data from popular SaaS business applications into a Supabase (Postgres) database. It supports both low‑latency ingestion via webhooks and configurable periodic synchronization via APIs, enabling businesses to maintain an up‑to‑date, unified data layer across their tools.
@@ -259,11 +259,11 @@ Explicitly excluded (Phase 1):
 
 ## 12. Risks & Mitigations
 
-| Risk | Mitigation |
-|----|----|
-| Webhook unreliability | Periodic reconciliation |
-| Schema drift | `api_version` tracking + resync |
-| Connector complexity | Strict in‑repo interface & review |
+| Risk                   | Mitigation                          |
+| ---------------------- | ----------------------------------- |
+| Webhook unreliability  | Periodic reconciliation             |
+| Schema drift           | `api_version` tracking + resync     |
+| Connector complexity   | Strict in‑repo interface & review   |
 | OSS maintenance burden | Opinionated scope & clear non‑goals |
 
 ---
@@ -281,4 +281,3 @@ Explicitly excluded (Phase 1):
 ---
 
 **SupaSaaSy aims to be the default data spine for Supabase‑based products that rely on SaaS ecosystems.**
-

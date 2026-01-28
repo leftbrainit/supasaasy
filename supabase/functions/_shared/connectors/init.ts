@@ -11,18 +11,18 @@ import './stripe/index.ts';
 
 // Re-export main connector functions for convenience
 export {
+  type Connector,
+  getAppConfig,
   getConnector,
   getConnectorForAppKey,
-  getAppConfig,
-  listConnectors,
+  type IncrementalConnector,
+  type IncrementalSyncHandler,
   listConnectorMetadata,
+  listConnectors,
   registerConnector,
   supportsIncrementalSync,
-  type Connector,
-  type IncrementalConnector,
-  type WebhookHandler,
   type SyncHandler,
-  type IncrementalSyncHandler,
+  type WebhookHandler,
 } from './index.ts';
 
 /**

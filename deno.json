@@ -8,7 +8,10 @@
     "tunnel": "ngrok http 54321",
     "lint": "deno lint",
     "fmt": "deno fmt",
-    "check": "deno check supabase/functions/_shared/**/*.ts config/*.ts"
+    "check": "deno check supabase/functions/_shared/**/*.ts config/*.ts",
+    "test": "deno test --allow-env --allow-read --allow-net supabase/functions/_shared/",
+    "test:watch": "deno test --allow-env --allow-read --allow-net --watch supabase/functions/_shared/",
+    "test:coverage": "deno test --allow-env --allow-read --allow-net --coverage=coverage supabase/functions/_shared/ && deno coverage coverage"
   },
   "compilerOptions": {
     "strict": true,

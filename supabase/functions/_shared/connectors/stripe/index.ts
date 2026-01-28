@@ -23,10 +23,7 @@ import type {
   WebhookEventType,
   WebhookVerificationResult,
 } from '../../types/index.ts';
-import {
-  registerConnector,
-  type IncrementalConnector,
-} from '../index.ts';
+import { type IncrementalConnector, registerConnector } from '../index.ts';
 import {
   createConnectorLogger,
   createNormalizedEntity,
@@ -36,17 +33,17 @@ import {
   mergeSyncResults,
 } from '../utils.ts';
 import {
-  upsertEntities,
   deleteEntity,
   getEntityExternalIds,
   getEntityExternalIdsCreatedAfter,
+  upsertEntities,
   type UpsertEntityData,
 } from '../../db.ts';
 import {
-  type StripeAppConfig,
-  type StripeResourceType,
   STRIPE_COLLECTION_KEYS,
   STRIPE_WEBHOOK_EVENTS,
+  type StripeAppConfig,
+  type StripeResourceType,
   type StripeWebhookEventType,
 } from './types.ts';
 
@@ -133,7 +130,8 @@ const metadata: ConnectorMetadata = {
   version: CONNECTOR_VERSION,
   apiVersion: DEFAULT_API_VERSION,
   supportedResources: SUPPORTED_RESOURCES,
-  description: 'Syncs customers, products, prices, plans, subscriptions, and subscription items from Stripe',
+  description:
+    'Syncs customers, products, prices, plans, subscriptions, and subscription items from Stripe',
   migrations: MIGRATION_FILES,
 };
 
@@ -232,7 +230,7 @@ function getSyncFromTimestamp(appConfig: AppConfig): number | undefined {
     const date = typeof appConfig.sync_from === 'string'
       ? new Date(appConfig.sync_from)
       : appConfig.sync_from;
-    
+
     if (!isNaN(date.getTime())) {
       return Math.floor(date.getTime() / 1000);
     }
@@ -261,7 +259,7 @@ function getSyncFromTimestamp(appConfig: AppConfig): number | undefined {
  */
 function detectArchivedAt(
   resourceType: StripeResourceType,
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): Date | undefined {
   switch (resourceType) {
     case 'customer':
@@ -303,7 +301,7 @@ function detectArchivedAt(
 function normalizeStripeEntity(
   resourceType: StripeResourceType,
   data: Record<string, unknown>,
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): NormalizedEntity {
   const externalId = data.id as string;
   const collectionKey = STRIPE_COLLECTION_KEYS[resourceType];
@@ -328,7 +326,7 @@ function normalizeStripeEntity(
  */
 async function verifyWebhook(
   request: Request,
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): Promise<WebhookVerificationResult> {
   try {
     const webhookSecret = getWebhookSecret(appConfig);
@@ -369,7 +367,7 @@ async function verifyWebhook(
 // deno-lint-ignore require-await
 async function parseWebhookEvent(
   payload: unknown,
-  _appConfig: AppConfig
+  _appConfig: AppConfig,
 ): Promise<ParsedWebhookEvent> {
   const event = payload as Stripe.Event;
   const eventType = event.type as StripeWebhookEventType;
@@ -413,7 +411,7 @@ async function parseWebhookEvent(
 // deno-lint-ignore require-await
 async function extractEntity(
   event: ParsedWebhookEvent,
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): Promise<NormalizedEntity | null> {
   // Skip unknown resource types
   if (event.resourceType === 'unknown') {
@@ -436,7 +434,7 @@ async function extractEntity(
 // deno-lint-ignore require-await
 async function extractEntities(
   event: ParsedWebhookEvent,
-  appConfig: AppConfig
+  appConfig: AppConfig,
 ): Promise<NormalizedEntity[]> {
   const entities: NormalizedEntity[] = [];
 
@@ -459,7 +457,7 @@ async function extractEntities(
   // For subscription events, also extract subscription items
   if (resourceType === 'subscription') {
     const subscriptionData = event.data;
-    
+
     // Check if items are embedded in the subscription data
     // Items come as { object: 'list', data: [...], has_more: boolean, url: string }
     const items = subscriptionData.items as {
@@ -469,8 +467,11 @@ async function extractEntities(
     } | undefined;
 
     if (items && items.data && Array.isArray(items.data)) {
-      logger.info('webhook', `Subscription ${subscriptionData.id} has ${items.data.length} embedded item(s)`);
-      
+      logger.info(
+        'webhook',
+        `Subscription ${subscriptionData.id} has ${items.data.length} embedded item(s)`,
+      );
+
       for (const item of items.data) {
         const itemEntity = normalizeStripeEntity('subscription_item', item, appConfig);
         entities.push(itemEntity);
@@ -481,11 +482,14 @@ async function extractEntities(
         logger.warn(
           'webhook',
           `Subscription ${subscriptionData.id} has more items than embedded in webhook. ` +
-          `Consider running a full sync to capture all items.`
+            `Consider running a full sync to capture all items.`,
         );
       }
     } else {
-      logger.warn('webhook', `Subscription ${subscriptionData.id} has no embedded items in webhook payload`);
+      logger.warn(
+        'webhook',
+        `Subscription ${subscriptionData.id} has no embedded items in webhook payload`,
+      );
     }
   }
 
@@ -518,7 +522,7 @@ async function syncCustomers(
   appConfig: AppConfig,
   options: SyncOptions,
   existingIds?: Set<string>,
-  syncFromTimestamp?: number
+  syncFromTimestamp?: number,
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -528,9 +532,7 @@ async function syncCustomers(
   const seenIds = new Set<string>();
 
   // For full sync, use syncFromTimestamp as the floor if configured
-  const createdGte = since
-    ? Math.floor(since.getTime() / 1000)
-    : syncFromTimestamp;
+  const createdGte = since ? Math.floor(since.getTime() / 1000) : syncFromTimestamp;
 
   try {
     let hasMore = true;
@@ -549,7 +551,7 @@ async function syncCustomers(
         const entity = normalizeStripeEntity(
           'customer',
           customer as unknown as Record<string, unknown>,
-          appConfig
+          appConfig,
         );
         entities.push(toUpsertData(entity));
       }
@@ -583,7 +585,7 @@ async function syncCustomers(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.customer,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -613,7 +615,7 @@ async function syncProducts(
   appConfig: AppConfig,
   options: SyncOptions,
   existingIds?: Set<string>,
-  syncFromTimestamp?: number
+  syncFromTimestamp?: number,
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -623,9 +625,7 @@ async function syncProducts(
   const seenIds = new Set<string>();
 
   // For full sync, use syncFromTimestamp as the floor if configured
-  const createdGte = since
-    ? Math.floor(since.getTime() / 1000)
-    : syncFromTimestamp;
+  const createdGte = since ? Math.floor(since.getTime() / 1000) : syncFromTimestamp;
 
   try {
     let hasMore = true;
@@ -646,7 +646,7 @@ async function syncProducts(
         const entity = normalizeStripeEntity(
           'product',
           product as unknown as Record<string, unknown>,
-          appConfig
+          appConfig,
         );
         entities.push(toUpsertData(entity));
       }
@@ -679,7 +679,7 @@ async function syncProducts(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.product,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -709,7 +709,7 @@ async function syncPrices(
   appConfig: AppConfig,
   options: SyncOptions,
   existingIds?: Set<string>,
-  syncFromTimestamp?: number
+  syncFromTimestamp?: number,
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -719,9 +719,7 @@ async function syncPrices(
   const seenIds = new Set<string>();
 
   // For full sync, use syncFromTimestamp as the floor if configured
-  const createdGte = since
-    ? Math.floor(since.getTime() / 1000)
-    : syncFromTimestamp;
+  const createdGte = since ? Math.floor(since.getTime() / 1000) : syncFromTimestamp;
 
   try {
     let hasMore = true;
@@ -742,7 +740,7 @@ async function syncPrices(
         const entity = normalizeStripeEntity(
           'price',
           price as unknown as Record<string, unknown>,
-          appConfig
+          appConfig,
         );
         entities.push(toUpsertData(entity));
       }
@@ -775,7 +773,7 @@ async function syncPrices(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.price,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -805,7 +803,7 @@ async function syncPlans(
   appConfig: AppConfig,
   options: SyncOptions,
   existingIds?: Set<string>,
-  syncFromTimestamp?: number
+  syncFromTimestamp?: number,
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -815,9 +813,7 @@ async function syncPlans(
   const seenIds = new Set<string>();
 
   // For full sync, use syncFromTimestamp as the floor if configured
-  const createdGte = since
-    ? Math.floor(since.getTime() / 1000)
-    : syncFromTimestamp;
+  const createdGte = since ? Math.floor(since.getTime() / 1000) : syncFromTimestamp;
 
   try {
     let hasMore = true;
@@ -838,7 +834,7 @@ async function syncPlans(
         const entity = normalizeStripeEntity(
           'plan',
           plan as unknown as Record<string, unknown>,
-          appConfig
+          appConfig,
         );
         entities.push(toUpsertData(entity));
       }
@@ -871,7 +867,7 @@ async function syncPlans(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.plan,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -898,7 +894,7 @@ async function syncPlans(
  */
 async function fetchAllSubscriptionItems(
   stripe: Stripe,
-  subscriptionId: string
+  subscriptionId: string,
 ): Promise<Stripe.SubscriptionItem[]> {
   const items: Stripe.SubscriptionItem[] = [];
   let cursor: string | undefined;
@@ -928,13 +924,16 @@ async function fetchAllSubscriptionItems(
  */
 async function getSubscriptionItems(
   stripe: Stripe,
-  subscription: Stripe.Subscription
+  subscription: Stripe.Subscription,
 ): Promise<Stripe.SubscriptionItem[]> {
   // Check if items are embedded in the subscription response
   if (subscription.items && subscription.items.data && subscription.items.data.length > 0) {
     // If there are more items than returned, fetch all items separately
     if (subscription.items.has_more) {
-      logger.info('sync', `Subscription ${subscription.id} has more items than initially returned, fetching all items`);
+      logger.info(
+        'sync',
+        `Subscription ${subscription.id} has more items than initially returned, fetching all items`,
+      );
       return await fetchAllSubscriptionItems(stripe, subscription.id);
     }
     return subscription.items.data;
@@ -955,7 +954,7 @@ async function syncSubscriptions(
   options: SyncOptions,
   existingIds?: Set<string>,
   existingItemIds?: Set<string>,
-  syncFromTimestamp?: number
+  syncFromTimestamp?: number,
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -966,9 +965,7 @@ async function syncSubscriptions(
   const seenItemIds = new Set<string>();
 
   // For full sync, use syncFromTimestamp as the floor if configured
-  const createdGte = since
-    ? Math.floor(since.getTime() / 1000)
-    : syncFromTimestamp;
+  const createdGte = since ? Math.floor(since.getTime() / 1000) : syncFromTimestamp;
 
   try {
     let hasMore = true;
@@ -993,13 +990,13 @@ async function syncSubscriptions(
         const subEntity = normalizeStripeEntity(
           'subscription',
           subscription as unknown as Record<string, unknown>,
-          appConfig
+          appConfig,
         );
         subEntities.push(toUpsertData(subEntity));
 
         // Fetch and normalize subscription items
         const items = await getSubscriptionItems(stripe, subscription);
-        
+
         if (items.length === 0) {
           logger.warn('sync', `Subscription ${subscription.id} has no items`);
         } else {
@@ -1011,7 +1008,7 @@ async function syncSubscriptions(
           const itemEntity = normalizeStripeEntity(
             'subscription_item',
             item as unknown as Record<string, unknown>,
-            appConfig
+            appConfig,
           );
           itemEntities.push(toUpsertData(itemEntity));
         }
@@ -1061,7 +1058,7 @@ async function syncSubscriptions(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.subscription,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -1079,7 +1076,7 @@ async function syncSubscriptions(
           const { error } = await deleteEntity(
             appConfig.app_key,
             STRIPE_COLLECTION_KEYS.subscription_item,
-            existingId
+            existingId,
           );
           if (error) {
             result.errors++;
@@ -1107,7 +1104,7 @@ async function syncSubscriptions(
  */
 async function fullSync(
   appConfig: AppConfig,
-  options: SyncOptions = {}
+  options: SyncOptions = {},
 ): Promise<SyncResult> {
   const timer = createTimer();
   const stripe = createStripeClient(appConfig);
@@ -1117,7 +1114,10 @@ async function fullSync(
   // Log if sync_from is active
   if (syncFromTimestamp) {
     const syncFromDate = new Date(syncFromTimestamp * 1000).toISOString();
-    logger.info('sync', `sync_from configured: syncing records created on or after ${syncFromDate}`);
+    logger.info(
+      'sync',
+      `sync_from configured: syncing records created on or after ${syncFromDate}`,
+    );
   }
 
   logger.syncStarted('full', resourceTypes);
@@ -1136,37 +1136,61 @@ async function fullSync(
 
     switch (resourceType) {
       case 'customer':
-        syncResult = await syncCustomers(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
+        syncResult = await syncCustomers(
+          stripe,
+          appConfig,
+          options,
+          existingIds ?? undefined,
+          syncFromTimestamp,
+        );
         break;
       case 'product':
-        syncResult = await syncProducts(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
+        syncResult = await syncProducts(
+          stripe,
+          appConfig,
+          options,
+          existingIds ?? undefined,
+          syncFromTimestamp,
+        );
         break;
       case 'price':
-        syncResult = await syncPrices(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
+        syncResult = await syncPrices(
+          stripe,
+          appConfig,
+          options,
+          existingIds ?? undefined,
+          syncFromTimestamp,
+        );
         break;
       case 'plan':
-        syncResult = await syncPlans(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
+        syncResult = await syncPlans(
+          stripe,
+          appConfig,
+          options,
+          existingIds ?? undefined,
+          syncFromTimestamp,
+        );
         break;
       case 'subscription': {
         // Also get existing subscription item IDs (filtered by sync_from if configured)
         // Note: subscription items don't have their own 'created' field, so we filter by parent subscription
         const { data: existingItemIds } = syncFromTimestamp
           ? await getEntityExternalIdsCreatedAfter(
-              appConfig.app_key,
-              STRIPE_COLLECTION_KEYS.subscription_item,
-              syncFromTimestamp
-            )
+            appConfig.app_key,
+            STRIPE_COLLECTION_KEYS.subscription_item,
+            syncFromTimestamp,
+          )
           : await getEntityExternalIds(
-              appConfig.app_key,
-              STRIPE_COLLECTION_KEYS.subscription_item
-            );
+            appConfig.app_key,
+            STRIPE_COLLECTION_KEYS.subscription_item,
+          );
         syncResult = await syncSubscriptions(
           stripe,
           appConfig,
           options,
           existingIds ?? undefined,
           existingItemIds ?? undefined,
-          syncFromTimestamp
+          syncFromTimestamp,
         );
         break;
       }
@@ -1190,7 +1214,7 @@ async function fullSync(
 async function incrementalSync(
   appConfig: AppConfig,
   since: Date,
-  options: SyncOptions = {}
+  options: SyncOptions = {},
 ): Promise<SyncResult> {
   const timer = createTimer();
   const stripe = createStripeClient(appConfig);
@@ -1256,7 +1280,7 @@ const stripeConnector: IncrementalConnector = {
   normalizeEntity(
     resourceType: string,
     data: Record<string, unknown>,
-    config: AppConfig
+    config: AppConfig,
   ): NormalizedEntity {
     return normalizeStripeEntity(resourceType as StripeResourceType, data, config);
   },
@@ -1274,4 +1298,4 @@ registerConnector(CONNECTOR_NAME, () => stripeConnector);
 
 // Export for direct use
 export default stripeConnector;
-export { stripeConnector, metadata };
+export { metadata, stripeConnector };

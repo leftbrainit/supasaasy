@@ -4,12 +4,7 @@
  * Helper functions for entity normalization, logging, and common operations.
  */
 
-import type {
-  EntityRow,
-  NormalizedEntity,
-  SupportedResource,
-  SyncResult,
-} from '../types/index.ts';
+import type { EntityRow, NormalizedEntity, SupportedResource, SyncResult } from '../types/index.ts';
 
 // =============================================================================
 // Entity Normalization Helpers
@@ -78,7 +73,7 @@ export function createNormalizedEntity(params: {
  */
 export function buildCollectionKey(
   providerName: string,
-  resourceType: string
+  resourceType: string,
 ): string {
   return `${providerName}_${resourceType}`;
 }
@@ -91,7 +86,7 @@ export function buildCollectionKey(
  */
 export function getCollectionKey(
   resources: SupportedResource[],
-  resourceType: string
+  resourceType: string,
 ): string | undefined {
   const resource = resources.find((r) => r.resourceType === resourceType);
   return resource?.collectionKey;
@@ -103,7 +98,7 @@ export function getCollectionKey(
  * @returns Date if archived, undefined otherwise
  */
 export function detectArchivedAt(
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): Date | undefined {
   // Check common archived/deleted/inactive fields
   const archivedFields = [
@@ -140,7 +135,7 @@ export function detectArchivedAt(
   if (
     typeof status === 'string' &&
     ['archived', 'deleted', 'trashed', 'inactive', 'cancelled'].includes(
-      status.toLowerCase()
+      status.toLowerCase(),
     )
   ) {
     return new Date();
@@ -155,7 +150,7 @@ export function detectArchivedAt(
  * @returns The external ID or undefined if not found
  */
 export function extractExternalId(
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
 ): string | undefined {
   // Check common ID field names
   const idFields = ['id', 'external_id', 'uid', 'uuid', '_id'];
@@ -282,7 +277,7 @@ export function createConnectorLogger(connectorName: string) {
     level: LogLevel,
     operation: string,
     message: string,
-    data?: Record<string, unknown>
+    data?: Record<string, unknown>,
   ) => {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
@@ -293,7 +288,8 @@ export function createConnectorLogger(connectorName: string) {
       data,
     };
 
-    const formatted = `[${entry.timestamp}] [${level.toUpperCase()}] [${connectorName}] ${operation}: ${message}`;
+    const formatted =
+      `[${entry.timestamp}] [${level.toUpperCase()}] [${connectorName}] ${operation}: ${message}`;
 
     switch (level) {
       case 'debug':
