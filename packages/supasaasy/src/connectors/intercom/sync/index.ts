@@ -5,10 +5,7 @@
  */
 
 import type { AppConfig, SyncOptions, SyncResult } from '../../../types/index.ts';
-import {
-  getEntityExternalIds,
-  getEntityExternalIdsCreatedAfter,
-} from '../../../db/index.ts';
+import { getEntityExternalIds, getEntityExternalIdsCreatedAfter } from '../../../db/index.ts';
 import { createTimer, failedSyncResult, mergeSyncResults } from '../../utils.ts';
 import {
   createIntercomClient,
@@ -17,12 +14,7 @@ import {
   logger,
 } from '../client.ts';
 import { INTERCOM_COLLECTION_KEYS, type IntercomResourceType } from '../types.ts';
-import {
-  syncAdmins,
-  syncCompanies,
-  syncContacts,
-  syncConversations,
-} from './resources.ts';
+import { syncAdmins, syncCompanies, syncContacts, syncConversations } from './resources.ts';
 
 // =============================================================================
 // Full Sync

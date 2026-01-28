@@ -30,17 +30,9 @@ import {
   validateIntercomConfig,
 } from './client.ts';
 import { normalizeIntercomEntity } from './normalization.ts';
-import {
-  extractEntities,
-  extractEntity,
-  parseWebhookEvent,
-  verifyWebhook,
-} from './webhooks.ts';
+import { extractEntities, extractEntity, parseWebhookEvent, verifyWebhook } from './webhooks.ts';
 import { fullSync, incrementalSync } from './sync/index.ts';
-import {
-  INTERCOM_COLLECTION_KEYS,
-  type IntercomResourceType,
-} from './types.ts';
+import { INTERCOM_COLLECTION_KEYS, type IntercomResourceType } from './types.ts';
 
 // =============================================================================
 // Supported Resources
@@ -152,7 +144,7 @@ registerConnector(CONNECTOR_NAME, () => intercomConnector);
 
 // Export for direct use
 export default intercomConnector;
-export { metadata, intercomConnector };
+export { intercomConnector, metadata };
 
 // Re-export modules for direct access if needed
 export * from './client.ts';

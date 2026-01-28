@@ -66,9 +66,7 @@ function validateAppConfig(app: AppConfig, index: number): ConfigValidationError
 
   // Validate sync_from if provided
   if (app.sync_from !== undefined) {
-    const date = typeof app.sync_from === 'string'
-      ? new Date(app.sync_from)
-      : app.sync_from;
+    const date = typeof app.sync_from === 'string' ? new Date(app.sync_from) : app.sync_from;
 
     if (!(date instanceof Date) || isNaN(date.getTime())) {
       errors.push({

@@ -5,13 +5,9 @@
  */
 
 import type { AppConfig, NormalizedEntity, SyncOptions, SyncResult } from '../../../types/index.ts';
-import {
-  deleteEntity,
-  upsertEntities,
-  type UpsertEntityData,
-} from '../../../db/index.ts';
+import { deleteEntity, upsertEntities, type UpsertEntityData } from '../../../db/index.ts';
 import { createTimer, emptySyncResult } from '../../utils.ts';
-import { type IntercomClient, DEFAULT_PAGE_SIZE, logger } from '../client.ts';
+import { DEFAULT_PAGE_SIZE, type IntercomClient, logger } from '../client.ts';
 import { normalizeIntercomEntity } from '../normalization.ts';
 import { INTERCOM_COLLECTION_KEYS } from '../types.ts';
 

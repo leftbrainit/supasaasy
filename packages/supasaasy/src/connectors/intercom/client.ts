@@ -149,9 +149,15 @@ export interface IntercomClient {
   /** Make a POST request to the Intercom API */
   post<T>(path: string, body: unknown): Promise<T>;
   /** List companies with pagination */
-  listCompanies(cursor?: string, perPage?: number): Promise<IntercomPaginatedResponse<IntercomCompany>>;
+  listCompanies(
+    cursor?: string,
+    perPage?: number,
+  ): Promise<IntercomPaginatedResponse<IntercomCompany>>;
   /** List contacts with pagination */
-  listContacts(cursor?: string, perPage?: number): Promise<IntercomPaginatedResponse<IntercomContact>>;
+  listContacts(
+    cursor?: string,
+    perPage?: number,
+  ): Promise<IntercomPaginatedResponse<IntercomContact>>;
   /** List admins (no pagination) */
   listAdmins(): Promise<{ type: 'admin.list'; admins: IntercomAdmin[] }>;
   /** List conversations with pagination */
@@ -159,7 +165,11 @@ export interface IntercomClient {
   /** Get a single conversation with parts */
   getConversation(conversationId: string): Promise<IntercomConversation>;
   /** Search conversations by updated_at for incremental sync */
-  searchConversations(updatedSince: number, cursor?: string, perPage?: number): Promise<IntercomSearchResponse<IntercomConversation>>;
+  searchConversations(
+    updatedSince: number,
+    cursor?: string,
+    perPage?: number,
+  ): Promise<IntercomSearchResponse<IntercomConversation>>;
 }
 
 /**
@@ -284,7 +294,12 @@ export function createIntercomClient(appConfig: AppConfig): IntercomClient {
           ...(cursor && { starting_after: cursor }),
         },
       };
-      return request<IntercomSearchResponse<IntercomConversation>>('POST', '/conversations/search', undefined, body);
+      return request<IntercomSearchResponse<IntercomConversation>>(
+        'POST',
+        '/conversations/search',
+        undefined,
+        body,
+      );
     },
   };
 }
@@ -309,14 +324,18 @@ export function validateIntercomConfig(appConfig: AppConfig): ConfigValidationRe
     errors.push({
       field: 'api_key',
       message: 'No Intercom API key configured',
-      suggestion: `Set ${config.api_key_env || `INTERCOM_API_KEY_${appConfig.app_key.toUpperCase()}`} environment variable`,
+      suggestion: `Set ${
+        config.api_key_env || `INTERCOM_API_KEY_${appConfig.app_key.toUpperCase()}`
+      } environment variable`,
     });
   }
 
   // Validate webhook secret (only warn, as it's only required for webhook handling)
   const hasWebhookSecretEnv = config.webhook_secret_env && Deno.env.get(config.webhook_secret_env);
   const hasWebhookSecret = !!config.webhook_secret;
-  const hasDefaultWebhookSecret = Deno.env.get(`INTERCOM_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`);
+  const hasDefaultWebhookSecret = Deno.env.get(
+    `INTERCOM_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`,
+  );
 
   if (!hasWebhookSecretEnv && !hasWebhookSecret && !hasDefaultWebhookSecret) {
     logger.warn(

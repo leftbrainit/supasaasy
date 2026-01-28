@@ -95,24 +95,24 @@ supabase db push --local
 
 ### Stripe
 
-| Resource           | Collection Key             | Description                    |
-| ------------------ | -------------------------- | ------------------------------ |
-| Customers          | `stripe_customer`          | Stripe customer objects        |
-| Products           | `stripe_product`           | Stripe products                |
-| Prices             | `stripe_price`             | Stripe prices                  |
-| Plans              | `stripe_plan`              | Legacy Stripe plans            |
-| Subscriptions      | `stripe_subscription`      | Stripe subscriptions           |
-| Subscription Items | `stripe_subscription_item` | Items within subscriptions     |
+| Resource           | Collection Key             | Description                |
+| ------------------ | -------------------------- | -------------------------- |
+| Customers          | `stripe_customer`          | Stripe customer objects    |
+| Products           | `stripe_product`           | Stripe products            |
+| Prices             | `stripe_price`             | Stripe prices              |
+| Plans              | `stripe_plan`              | Legacy Stripe plans        |
+| Subscriptions      | `stripe_subscription`      | Stripe subscriptions       |
+| Subscription Items | `stripe_subscription_item` | Items within subscriptions |
 
 ### Intercom
 
-| Resource           | Collection Key               | Description                    |
-| ------------------ | ---------------------------- | ------------------------------ |
-| Companies          | `intercom_company`           | Intercom companies             |
-| Contacts           | `intercom_contact`           | Users and leads                |
-| Admins             | `intercom_admin`             | Team members                   |
-| Conversations      | `intercom_conversation`      | Conversations                  |
-| Conversation Parts | `intercom_conversation_part` | Messages within conversations  |
+| Resource           | Collection Key               | Description                   |
+| ------------------ | ---------------------------- | ----------------------------- |
+| Companies          | `intercom_company`           | Intercom companies            |
+| Contacts           | `intercom_contact`           | Users and leads               |
+| Admins             | `intercom_admin`             | Team members                  |
+| Conversations      | `intercom_conversation`      | Conversations                 |
+| Conversation Parts | `intercom_conversation_part` | Messages within conversations |
 
 ## Configuration Options
 
@@ -120,15 +120,15 @@ supabase db push --local
 
 ```typescript
 interface AppConfig {
-  app_key: string;      // Unique identifier (used in webhook URLs)
-  name: string;         // Human-readable name
-  connector: string;    // Connector type ('stripe' | 'intercom')
+  app_key: string; // Unique identifier (used in webhook URLs)
+  name: string; // Human-readable name
+  connector: string; // Connector type ('stripe' | 'intercom')
   config: {
-    api_key_env?: string;        // Environment variable for API key
+    api_key_env?: string; // Environment variable for API key
     webhook_secret_env?: string; // Environment variable for webhook secret
-    sync_resources?: string[];   // Optional: specific resources to sync
+    sync_resources?: string[]; // Optional: specific resources to sync
   };
-  sync_from?: string | Date;  // Optional: minimum date for historical sync
+  sync_from?: string | Date; // Optional: minimum date for historical sync
 }
 ```
 

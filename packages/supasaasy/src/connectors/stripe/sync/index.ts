@@ -5,10 +5,7 @@
  */
 
 import type { AppConfig, SyncOptions, SyncResult } from '../../../types/index.ts';
-import {
-  getEntityExternalIds,
-  getEntityExternalIdsCreatedAfter,
-} from '../../../db/index.ts';
+import { getEntityExternalIds, getEntityExternalIdsCreatedAfter } from '../../../db/index.ts';
 import { createTimer, failedSyncResult, mergeSyncResults } from '../../utils.ts';
 import {
   createStripeClient,

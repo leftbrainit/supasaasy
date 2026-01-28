@@ -6,11 +6,7 @@
 
 import type Stripe from 'stripe';
 import type { AppConfig, NormalizedEntity, SyncOptions, SyncResult } from '../../../types/index.ts';
-import {
-  deleteEntity,
-  upsertEntities,
-  type UpsertEntityData,
-} from '../../../db/index.ts';
+import { deleteEntity, upsertEntities, type UpsertEntityData } from '../../../db/index.ts';
 import { createTimer, emptySyncResult } from '../../utils.ts';
 import { DEFAULT_PAGE_SIZE, logger } from '../client.ts';
 import { normalizeStripeEntity } from '../normalization.ts';

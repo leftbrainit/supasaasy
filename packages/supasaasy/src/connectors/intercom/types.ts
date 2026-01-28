@@ -76,7 +76,6 @@ export const INTERCOM_WEBHOOK_EVENTS = {
   'conversation.rating.added': { resourceType: 'conversation', eventType: 'update' },
   'conversation.rating.remarked': { resourceType: 'conversation', eventType: 'update' },
   'conversation.part.tag.created': { resourceType: 'conversation', eventType: 'update' },
-
   // Note: Admin resources don't have webhooks in Intercom
 } as const;
 

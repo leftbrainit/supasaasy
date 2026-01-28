@@ -186,7 +186,8 @@ export function supportsIncrementalSync(
 export function supportsConfigValidation(
   connector: Connector,
 ): connector is ValidatableConnector {
-  return 'validateConfig' in connector && typeof (connector as ValidatableConnector).validateConfig === 'function';
+  return 'validateConfig' in connector &&
+    typeof (connector as ValidatableConnector).validateConfig === 'function';
 }
 
 // =============================================================================
@@ -298,7 +299,9 @@ export function validateConnectorConfig(
       return msg;
     });
     throw new Error(
-      `Configuration validation failed for ${appConfig.app_key}:\n  - ${errorMessages.join('\n  - ')}`,
+      `Configuration validation failed for ${appConfig.app_key}:\n  - ${
+        errorMessages.join('\n  - ')
+      }`,
     );
   }
 }

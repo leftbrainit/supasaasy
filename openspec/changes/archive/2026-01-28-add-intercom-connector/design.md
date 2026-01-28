@@ -13,6 +13,7 @@ This is Phase 2 of SupaSaaSy, validating that the connector architecture support
 ## Goals / Non-Goals
 
 ### Goals
+
 - Sync Company, Contact, Admin, Conversation, and Conversation Part resources
 - Support webhook-based real-time updates
 - Support full and incremental API sync
@@ -20,6 +21,7 @@ This is Phase 2 of SupaSaaSy, validating that the connector architecture support
 - Handle nested data (conversation parts within conversations)
 
 ### Non-Goals
+
 - Two-way sync / write-back to Intercom
 - Syncing all Intercom resources (Articles, Help Center, etc.)
 - Real-time conversation part extraction from webhooks (will sync via API)
@@ -27,22 +29,27 @@ This is Phase 2 of SupaSaaSy, validating that the connector architecture support
 ## Decisions
 
 ### Decision: Use native fetch for API calls
+
 - **Rationale**: No official Intercom Deno SDK available; fetch is sufficient for REST APIs
 - **Alternative**: Could create a thin wrapper, but adds complexity without benefit
 
 ### Decision: Store Conversation Parts as separate entities
+
 - **Rationale**: Parts have their own IDs and can be queried independently
 - **Alternative**: Store embedded in conversation raw_payload (loses queryability)
 
 ### Decision: Sync Admins without webhooks
+
 - **Rationale**: Intercom doesn't provide admin webhooks; admins change rarely
 - **Alternative**: Skip admin sync (loses useful data for conversation assignment context)
 
 ### Decision: Use client_secret for webhook verification
+
 - **Rationale**: Intercom signs webhooks using the app's client_secret (not a separate webhook secret)
 - **Environment variable**: `INTERCOM_WEBHOOK_SECRET_*` will store the client_secret value
 
 ### Decision: Use conversation search for incremental sync
+
 - **Rationale**: Intercom's `/conversations/search` endpoint supports filtering by `updated_at`
 - **Alternative**: List all conversations and filter client-side (inefficient)
 

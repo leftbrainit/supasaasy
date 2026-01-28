@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 03-add-connector-interface. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Connector Metadata
 
 Each connector SHALL provide metadata describing its capabilities and supported resources.
@@ -399,4 +401,3 @@ Connectors SHALL validate their configuration before operations.
 - **THEN** the error message SHALL identify the specific field
 - **AND** the message SHALL describe what is wrong
 - **AND** the message SHALL suggest how to fix it
-

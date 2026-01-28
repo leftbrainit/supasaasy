@@ -167,14 +167,18 @@ export function validateStripeConfig(appConfig: AppConfig): ConfigValidationResu
     errors.push({
       field: 'api_key',
       message: 'No Stripe API key configured',
-      suggestion: `Set ${config.api_key_env || `STRIPE_API_KEY_${appConfig.app_key.toUpperCase()}`} environment variable or configure api_key_env`,
+      suggestion: `Set ${
+        config.api_key_env || `STRIPE_API_KEY_${appConfig.app_key.toUpperCase()}`
+      } environment variable or configure api_key_env`,
     });
   }
 
   // Validate webhook secret (only warn, as it's only required for webhook handling)
   const hasWebhookSecretEnv = config.webhook_secret_env && Deno.env.get(config.webhook_secret_env);
   const hasWebhookSecret = !!config.webhook_secret;
-  const hasDefaultWebhookSecret = Deno.env.get(`STRIPE_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`);
+  const hasDefaultWebhookSecret = Deno.env.get(
+    `STRIPE_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`,
+  );
 
   if (!hasWebhookSecretEnv && !hasWebhookSecret && !hasDefaultWebhookSecret) {
     // This is a warning, not an error - webhooks are optional

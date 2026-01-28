@@ -32,17 +32,9 @@ import {
   validateStripeConfig,
 } from './client.ts';
 import { normalizeStripeEntity } from './normalization.ts';
-import {
-  extractEntities,
-  extractEntity,
-  parseWebhookEvent,
-  verifyWebhook,
-} from './webhooks.ts';
+import { extractEntities, extractEntity, parseWebhookEvent, verifyWebhook } from './webhooks.ts';
 import { fullSync, incrementalSync } from './sync/index.ts';
-import {
-  STRIPE_COLLECTION_KEYS,
-  type StripeResourceType,
-} from './types.ts';
+import { STRIPE_COLLECTION_KEYS, type StripeResourceType } from './types.ts';
 
 // =============================================================================
 // Supported Resources

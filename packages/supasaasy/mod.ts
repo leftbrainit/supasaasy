@@ -49,11 +49,11 @@
 // =============================================================================
 
 export {
-  defineConfig,
-  validateConfig,
   type ConfigValidationError,
   type ConfigValidationResult,
+  defineConfig,
   type DefineConfigOptions,
+  validateConfig,
 } from './src/config/define-config.ts';
 
 // =============================================================================
@@ -68,8 +68,8 @@ export { createSyncHandler } from './src/handlers/sync.ts';
 // =============================================================================
 
 export {
-  getMigrations,
   getCoreSchema,
+  getMigrations,
   type GetMigrationsOptions,
 } from './src/migrations/get-migrations.ts';
 
@@ -100,24 +100,24 @@ export type {
 // =============================================================================
 
 export {
-  getSupabaseClient,
-  query,
-  resetClient,
-  upsertEntity,
-  upsertEntities,
-  deleteEntity,
   deleteEntities,
+  deleteEntity,
+  type DeleteResult,
+  type Entity,
   getEntity,
   getEntityExternalIds,
   getEntityExternalIdsCreatedAfter,
+  getSupabaseClient,
   getSyncState,
-  updateSyncState,
   getSyncStates,
-  type Entity,
+  query,
+  resetClient,
+  type SyncState,
+  updateSyncState,
+  upsertEntities,
+  upsertEntity,
   type UpsertEntityData,
   type UpsertResult,
-  type DeleteResult,
-  type SyncState,
 } from './src/db/index.ts';
 
 // =============================================================================
@@ -125,29 +125,29 @@ export {
 // =============================================================================
 
 export {
-  registerConnector,
-  getConnector,
-  getConnectorForAppKey,
-  getAppConfig,
-  listConnectors,
-  listConnectorMetadata,
-  setConfig,
-  getConfig,
   clearConfig,
   clearConnectorCache,
   clearConnectorRegistry,
-  supportsIncrementalSync,
-  supportsConfigValidation,
-  validateConnectorConfig,
-  type Connector,
-  type IncrementalConnector,
-  type ValidatableConnector,
-  type WebhookHandler,
-  type SyncHandler,
-  type IncrementalSyncHandler,
-  type ConfigValidator,
   type ConfigValidationError as ConnectorConfigValidationError,
   type ConfigValidationResult as ConnectorConfigValidationResult,
+  type ConfigValidator,
+  type Connector,
+  getAppConfig,
+  getConfig,
+  getConnector,
+  getConnectorForAppKey,
+  type IncrementalConnector,
+  type IncrementalSyncHandler,
+  listConnectorMetadata,
+  listConnectors,
+  registerConnector,
+  setConfig,
+  supportsConfigValidation,
+  supportsIncrementalSync,
+  type SyncHandler,
+  type ValidatableConnector,
+  validateConnectorConfig,
+  type WebhookHandler,
 } from './src/connectors/index.ts';
 
 // =============================================================================
@@ -155,16 +155,16 @@ export {
 // =============================================================================
 
 export {
-  ConnectorError,
-  WebhookVerificationError,
-  RateLimitError,
   ApiError,
-  EntityNotFoundError,
-  NormalizationError,
   ConfigurationError,
+  ConnectorError,
+  EntityNotFoundError,
+  getRetryAfterSeconds,
   isConnectorError,
   isRetryableError,
-  getRetryAfterSeconds,
+  NormalizationError,
+  RateLimitError,
+  WebhookVerificationError,
 } from './src/connectors/errors.ts';
 
 // =============================================================================
@@ -172,24 +172,24 @@ export {
 // =============================================================================
 
 export {
-  entityToRow,
-  rowToEntity,
-  createNormalizedEntity,
   buildCollectionKey,
-  getCollectionKey,
-  detectArchivedAt,
-  extractExternalId,
-  emptySyncResult,
-  failedSyncResult,
-  mergeSyncResults,
-  paginatedSync,
   createConnectorLogger,
+  createNormalizedEntity,
   createTimer,
-  type PaginatedResponse,
-  type PaginatedSyncConfig,
-  type SyncProgressInfo,
-  type LogLevel,
+  detectArchivedAt,
+  emptySyncResult,
+  entityToRow,
+  extractExternalId,
+  failedSyncResult,
+  getCollectionKey,
   type LogEntry,
+  type LogLevel,
+  mergeSyncResults,
+  type PaginatedResponse,
+  paginatedSync,
+  type PaginatedSyncConfig,
+  rowToEntity,
+  type SyncProgressInfo,
 } from './src/connectors/utils.ts';
 
 // =============================================================================
@@ -197,9 +197,12 @@ export {
 // =============================================================================
 
 // Stripe Connector
-export { stripeConnector, metadata as stripeMetadata } from './src/connectors/stripe/index.ts';
-export type { StripeResourceType, StripeAppConfig } from './src/connectors/stripe/types.ts';
+export { metadata as stripeMetadata, stripeConnector } from './src/connectors/stripe/index.ts';
+export type { StripeAppConfig, StripeResourceType } from './src/connectors/stripe/types.ts';
 
 // Intercom Connector
-export { intercomConnector, metadata as intercomMetadata } from './src/connectors/intercom/index.ts';
-export type { IntercomResourceType, IntercomAppConfig } from './src/connectors/intercom/types.ts';
+export {
+  intercomConnector,
+  metadata as intercomMetadata,
+} from './src/connectors/intercom/index.ts';
+export type { IntercomAppConfig, IntercomResourceType } from './src/connectors/intercom/types.ts';

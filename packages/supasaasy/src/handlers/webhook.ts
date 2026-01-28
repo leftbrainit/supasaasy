@@ -5,18 +5,14 @@
  * URL pattern: POST /webhook/{app_key}
  */
 
-import type { AppConfig, NormalizedEntity, ParsedWebhookEvent, SupaSaaSyConfig } from '../types/index.ts';
-import {
-  deleteEntity,
-  upsertEntities,
-  upsertEntity,
-  type UpsertEntityData,
-} from '../db/index.ts';
-import {
-  getAppConfig,
-  getConnector,
-  setConfig,
-} from '../connectors/index.ts';
+import type {
+  AppConfig,
+  NormalizedEntity,
+  ParsedWebhookEvent,
+  SupaSaaSyConfig,
+} from '../types/index.ts';
+import { deleteEntity, upsertEntities, upsertEntity, type UpsertEntityData } from '../db/index.ts';
+import { getAppConfig, getConnector, setConfig } from '../connectors/index.ts';
 
 // Import connectors to ensure they register themselves
 import '../connectors/stripe/index.ts';

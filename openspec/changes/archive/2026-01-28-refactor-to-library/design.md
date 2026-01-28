@@ -3,6 +3,7 @@
 SupaSaaSy is currently a scaffold project that users clone/fork. This creates friction for updates: users must manually merge upstream changes, resolving conflicts in configuration and customizations. The library approach treats SupaSaaSy as a dependency, simplifying the update story to "bump the version number."
 
 **Stakeholders:**
+
 - Existing users: Need migration path from scaffold to library
 - New users: Get cleaner onboarding experience
 - Maintainers: Develop against example project, publish to JSR
@@ -10,6 +11,7 @@ SupaSaaSy is currently a scaffold project that users clone/fork. This creates fr
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enable version-pinned dependency installation via JSR
 - Provide thin wrapper pattern for Edge Functions
 - Expose migrations programmatically via `getMigrations()`
@@ -17,6 +19,7 @@ SupaSaaSy is currently a scaffold project that users clone/fork. This creates fr
 - Maintain backward compatibility for connector interface internals
 
 **Non-Goals:**
+
 - Automatic template repo syncing (separate proposal)
 - Custom connector support within example project (separate proposal)
 - CLI tooling beyond migration generation
@@ -115,7 +118,7 @@ import config from '../supasaasy.config.ts';
 const sql = getMigrations(config);
 await Deno.writeTextFile(
   'supabase/migrations/00000000000001_supasaasy.sql',
-  sql
+  sql,
 );
 console.log('Migration file generated');
 ```
@@ -144,12 +147,12 @@ Publish to JSR (jsr.io) under `@supasaasy/core`.
 
 ## Risks / Trade-offs
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Breaking change for existing users | High | Provide migration guide, keep scaffold branch for legacy support |
-| JSR adoption is still growing | Medium | JSR works with npm via compatibility layer; add npm publishing later if needed |
-| Migrations require manual regeneration | Low | Clear documentation; script is one command |
-| Local development requires workspace understanding | Low | Example project provides working reference |
+| Risk                                               | Impact | Mitigation                                                                     |
+| -------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
+| Breaking change for existing users                 | High   | Provide migration guide, keep scaffold branch for legacy support               |
+| JSR adoption is still growing                      | Medium | JSR works with npm via compatibility layer; add npm publishing later if needed |
+| Migrations require manual regeneration             | Low    | Clear documentation; script is one command                                     |
+| Local development requires workspace understanding | Low    | Example project provides working reference                                     |
 
 ## Migration Plan
 
