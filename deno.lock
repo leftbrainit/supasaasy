@@ -301,9 +301,15 @@
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1",
-      "jsr:@std/http@1",
-      "npm:@supabase/supabase-js@2",
-      "npm:stripe@17"
-    ]
+      "jsr:@std/http@1"
+    ],
+    "members": {
+      "packages/supasaasy": {
+        "dependencies": [
+          "npm:@supabase/supabase-js@2",
+          "npm:stripe@17"
+        ]
+      }
+    }
   }
 }

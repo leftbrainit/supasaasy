@@ -11,7 +11,7 @@
  *   deno task new-connector hubspot
  */
 
-const CONNECTORS_DIR = 'supabase/functions/_shared/connectors';
+const CONNECTORS_DIR = 'packages/supasaasy/src/connectors';
 
 // =============================================================================
 // Template Files
