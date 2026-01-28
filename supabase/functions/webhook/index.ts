@@ -12,6 +12,7 @@ import {
 } from '../_shared/connectors/init.ts';
 import {
   upsertEntity,
+  upsertEntities,
   deleteEntity,
   type UpsertEntityData,
 } from '../_shared/db.ts';
@@ -95,6 +96,7 @@ function toUpsertData(entity: NormalizedEntity): UpsertEntityData {
 
 /**
  * Process a webhook event and perform the appropriate entity operation
+ * (legacy single-entity version for backwards compatibility)
  */
 async function processWebhookEvent(
   event: ParsedWebhookEvent,
@@ -147,6 +149,68 @@ async function processWebhookEvent(
 
   return {
     action: event.eventType,
+  };
+}
+
+/**
+ * Process a webhook event with multiple entities (e.g., subscription with items)
+ */
+async function processWebhookEntities(
+  event: ParsedWebhookEvent,
+  entities: NormalizedEntity[],
+  appConfig: AppConfig
+): Promise<{ action: string; count: number; error?: Error }> {
+  // For delete events, we don't need entity data
+  if (event.eventType === 'delete') {
+    const connector = await getConnector(appConfig.connector);
+    if (!connector) {
+      return { action: 'error', count: 0, error: new Error('Connector not found') };
+    }
+
+    // Get collection_key from connector metadata
+    const resource = connector.metadata.supportedResources.find(
+      (r) => r.resourceType === event.resourceType
+    );
+    const collectionKey = resource?.collectionKey ?? event.resourceType;
+
+    const result = await deleteEntity(
+      appConfig.app_key,
+      collectionKey,
+      event.externalId
+    );
+
+    if (result.error) {
+      return { action: 'delete', count: 0, error: result.error };
+    }
+
+    return { action: 'delete', count: 1 };
+  }
+
+  // For create, update, archive events, we need entity data
+  if (entities.length === 0) {
+    return { action: 'skip', count: 0, error: new Error('No entity data extracted') };
+  }
+
+  // Convert all entities to upsert format
+  const upsertDataArray: UpsertEntityData[] = entities.map((entity) => {
+    const data = toUpsertData(entity);
+    // For archive events, set the archived_at timestamp
+    if (event.eventType === 'archive') {
+      data.archived_at = event.timestamp.toISOString();
+    }
+    return data;
+  });
+
+  // Batch upsert all entities
+  const result = await upsertEntities(upsertDataArray);
+
+  if (result.error) {
+    return { action: event.eventType, count: 0, error: result.error };
+  }
+
+  return {
+    action: event.eventType,
+    count: entities.length,
   };
 }
 
@@ -218,6 +282,34 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
 
     // Extract and normalize entity data
+    // Use extractEntities if available (for nested resources like subscription items)
+    // Otherwise fall back to extractEntity for single entity
+    if (connector.extractEntities) {
+      const entities = await connector.extractEntities(event, appConfig);
+      
+      console.log(`Extracted ${entities.length} entity(ies) from webhook`);
+
+      // Process all entities
+      const result = await processWebhookEntities(event, entities, appConfig);
+
+      if (result.error) {
+        console.error(`Error processing webhook: ${result.error.message}`);
+        return errorResponse(`Processing error: ${result.error.message}`, 500);
+      }
+
+      console.log(
+        `Webhook processed successfully: ${result.action} ${result.count} entity(ies) for ${event.resourceType}:${event.externalId}`
+      );
+
+      return successResponse({
+        action: result.action,
+        resourceType: event.resourceType,
+        externalId: event.externalId,
+        entityCount: result.count,
+      });
+    }
+
+    // Fallback to single entity extraction for connectors without extractEntities
     const entity = await connector.extractEntity(event, appConfig);
 
     // Process the event (upsert, delete, or archive)

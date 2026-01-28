@@ -56,6 +56,19 @@ export interface WebhookHandler {
     event: ParsedWebhookEvent,
     config: AppConfig
   ): Promise<NormalizedEntity | null>;
+
+  /**
+   * Extract and normalize multiple entities from a webhook event.
+   * Used for events that contain nested resources (e.g., subscription with items).
+   * If not implemented, falls back to extractEntity returning a single entity.
+   * @param event The parsed webhook event
+   * @param config The app configuration
+   * @returns Array of normalized entities ready for database storage
+   */
+  extractEntities?(
+    event: ParsedWebhookEvent,
+    config: AppConfig
+  ): Promise<NormalizedEntity[]>;
 }
 
 /**

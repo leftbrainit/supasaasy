@@ -383,6 +383,69 @@ async function extractEntity(
   return normalizeStripeEntity(resourceType, event.data, appConfig);
 }
 
+/**
+ * Extract and normalize multiple entities from webhook event.
+ * Handles nested resources like subscription items within subscriptions.
+ */
+// deno-lint-ignore require-await
+async function extractEntities(
+  event: ParsedWebhookEvent,
+  appConfig: AppConfig
+): Promise<NormalizedEntity[]> {
+  const entities: NormalizedEntity[] = [];
+
+  // Skip unknown resource types
+  if (event.resourceType === 'unknown') {
+    return entities;
+  }
+
+  // For delete events on customers, we don't need entity data
+  if (event.eventType === 'delete' && event.resourceType === 'customer') {
+    return entities;
+  }
+
+  const resourceType = event.resourceType as StripeResourceType;
+
+  // Add the main entity
+  const mainEntity = normalizeStripeEntity(resourceType, event.data, appConfig);
+  entities.push(mainEntity);
+
+  // For subscription events, also extract subscription items
+  if (resourceType === 'subscription') {
+    const subscriptionData = event.data;
+    
+    // Check if items are embedded in the subscription data
+    // Items come as { object: 'list', data: [...], has_more: boolean, url: string }
+    const items = subscriptionData.items as {
+      object?: string;
+      data?: Array<Record<string, unknown>>;
+      has_more?: boolean;
+    } | undefined;
+
+    if (items && items.data && Array.isArray(items.data)) {
+      logger.info('webhook', `Subscription ${subscriptionData.id} has ${items.data.length} embedded item(s)`);
+      
+      for (const item of items.data) {
+        const itemEntity = normalizeStripeEntity('subscription_item', item, appConfig);
+        entities.push(itemEntity);
+      }
+
+      // Warn if there are more items than what's embedded (pagination issue)
+      if (items.has_more) {
+        logger.warn(
+          'webhook',
+          `Subscription ${subscriptionData.id} has more items than embedded in webhook. ` +
+          `Consider running a full sync to capture all items.`
+        );
+      }
+    } else {
+      logger.warn('webhook', `Subscription ${subscriptionData.id} has no embedded items in webhook payload`);
+    }
+  }
+
+  return entities;
+}
+
 // =============================================================================
 // Sync Implementation
 // =============================================================================
@@ -761,6 +824,59 @@ async function syncPlans(
 }
 
 /**
+ * Fetch all subscription items for a subscription, handling pagination
+ */
+async function fetchAllSubscriptionItems(
+  stripe: Stripe,
+  subscriptionId: string
+): Promise<Stripe.SubscriptionItem[]> {
+  const items: Stripe.SubscriptionItem[] = [];
+  let cursor: string | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const params: Stripe.SubscriptionItemListParams = {
+      subscription: subscriptionId,
+      limit: DEFAULT_PAGE_SIZE,
+      ...(cursor && { starting_after: cursor }),
+    };
+
+    const response = await stripe.subscriptionItems.list(params);
+    items.push(...response.data);
+
+    hasMore = response.has_more;
+    if (hasMore && response.data.length > 0) {
+      cursor = response.data[response.data.length - 1].id;
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Extract subscription items from embedded data or fetch separately if needed
+ */
+async function getSubscriptionItems(
+  stripe: Stripe,
+  subscription: Stripe.Subscription
+): Promise<Stripe.SubscriptionItem[]> {
+  // Check if items are embedded in the subscription response
+  if (subscription.items && subscription.items.data && subscription.items.data.length > 0) {
+    // If there are more items than returned, fetch all items separately
+    if (subscription.items.has_more) {
+      logger.info('sync', `Subscription ${subscription.id} has more items than initially returned, fetching all items`);
+      return await fetchAllSubscriptionItems(stripe, subscription.id);
+    }
+    return subscription.items.data;
+  }
+
+  // Items not embedded or empty - fetch them separately
+  // This handles edge cases where items might not be returned with the subscription
+  logger.info('sync', `Subscription ${subscription.id} has no embedded items, fetching separately`);
+  return await fetchAllSubscriptionItems(stripe, subscription.id);
+}
+
+/**
  * Sync subscriptions from Stripe (also syncs subscription items)
  */
 async function syncSubscriptions(
@@ -787,8 +903,6 @@ async function syncSubscriptions(
         ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
         // Include all subscription statuses
         status: 'all',
-        // Expand items to get subscription items
-        expand: ['data.items'],
       };
 
       const subscriptions = await stripe.subscriptions.list(params);
@@ -807,17 +921,23 @@ async function syncSubscriptions(
         );
         subEntities.push(toUpsertData(subEntity));
 
-        // Extract and normalize subscription items
-        if (subscription.items && subscription.items.data) {
-          for (const item of subscription.items.data) {
-            seenItemIds.add(item.id);
-            const itemEntity = normalizeStripeEntity(
-              'subscription_item',
-              item as unknown as Record<string, unknown>,
-              appConfig
-            );
-            itemEntities.push(toUpsertData(itemEntity));
-          }
+        // Fetch and normalize subscription items
+        const items = await getSubscriptionItems(stripe, subscription);
+        
+        if (items.length === 0) {
+          logger.warn('sync', `Subscription ${subscription.id} has no items`);
+        } else {
+          logger.info('sync', `Subscription ${subscription.id} has ${items.length} item(s)`);
+        }
+
+        for (const item of items) {
+          seenItemIds.add(item.id);
+          const itemEntity = normalizeStripeEntity(
+            'subscription_item',
+            item as unknown as Record<string, unknown>,
+            appConfig
+          );
+          itemEntities.push(toUpsertData(itemEntity));
         }
       }
 
@@ -827,7 +947,8 @@ async function syncSubscriptions(
         if (error) {
           result.errors++;
           result.errorMessages = result.errorMessages || [];
-          result.errorMessages.push(error.message);
+          result.errorMessages.push(`Failed to upsert subscriptions: ${error.message}`);
+          logger.error('sync', `Failed to upsert subscriptions: ${error.message}`);
         } else {
           result.created += subEntities.length;
         }
@@ -839,9 +960,11 @@ async function syncSubscriptions(
         if (error) {
           result.errors++;
           result.errorMessages = result.errorMessages || [];
-          result.errorMessages.push(error.message);
+          result.errorMessages.push(`Failed to upsert subscription items: ${error.message}`);
+          logger.error('sync', `Failed to upsert subscription items: ${error.message}`);
         } else {
           result.created += itemEntities.length;
+          logger.info('sync', `Successfully synced ${itemEntities.length} subscription item(s)`);
         }
       }
 
@@ -897,6 +1020,7 @@ async function syncSubscriptions(
     result.success = false;
     result.errors++;
     result.errorMessages = [message];
+    logger.error('sync', `Subscription sync failed: ${message}`);
   }
 
   return result;
@@ -1033,6 +1157,7 @@ const stripeConnector: IncrementalConnector = {
   verifyWebhook,
   parseWebhookEvent,
   extractEntity,
+  extractEntities,
 
   normalizeEntity(
     resourceType: string,
