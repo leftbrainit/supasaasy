@@ -1,26 +1,13 @@
 -- ============================================================================
--- DEPRECATED - Stripe Connector Views
+-- Stripe Connector Migrations
 -- ============================================================================
--- This migration file is DEPRECATED and will be removed in a future release.
+-- This file contains all database objects required by the Stripe connector.
+-- It is assembled into the main migrations by scripts/assemble-migrations.ts
+-- when the Stripe connector is configured in supasaasy.config.ts.
 --
--- Connector migrations have been moved to each connector's directory:
---   supabase/functions/_shared/connectors/stripe/migrations/001_views.sql
---
--- The assembly script (scripts/assemble-migrations.ts) now generates a combined
--- migration file (99999999999999_connector_migrations.sql) containing only the
--- migrations for configured connectors.
---
--- This file is kept temporarily for:
--- - Backwards compatibility during the transition period
--- - Reference for users upgrading from older versions
---
--- For new installations, this file will be applied but the statements are
--- idempotent and will not conflict with the assembled migrations.
+-- All statements must be idempotent (CREATE OR REPLACE, IF NOT EXISTS, etc.)
+-- to support re-running the assembly process safely.
 -- ============================================================================
---
--- ORIGINAL DESCRIPTION:
--- Creates convenience views for commonly queried Stripe data.
--- These views extract fields from the raw_payload JSONB column for easier querying.
 
 -- ============================================================================
 -- Customers View

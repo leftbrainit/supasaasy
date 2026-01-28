@@ -286,11 +286,17 @@ A successful sync returns a JSON response with details:
 supasaasy/
 ├── supabase/
 │   ├── config.toml              # Supabase local config
-│   ├── migrations/              # Database migrations
-│   │   └── 00000000000000_create_supasaasy_schema.sql
+│   ├── migrations/              # Core database migrations
+│   │   ├── 00000000000000_create_supasaasy_schema.sql
+│   │   └── 99999999999999_connector_migrations.sql  # Auto-generated
 │   └── functions/
 │       ├── _shared/             # Shared utilities
 │       │   ├── connectors/      # Connector implementations
+│       │   │   └── stripe/
+│       │   │       ├── index.ts
+│       │   │       ├── types.ts
+│       │   │       └── migrations/    # Connector-specific migrations
+│       │   │           └── 001_views.sql
 │       │   ├── types/           # TypeScript types
 │       │   ├── config.ts        # Configuration loader
 │       │   └── db.ts            # Database utilities
@@ -299,7 +305,8 @@ supasaasy/
 ├── config/
 │   └── supasaasy.config.ts      # App configuration
 ├── scripts/
-│   └── dev.sh                   # Local development helper
+│   ├── dev.sh                   # Local development helper
+│   └── assemble-migrations.ts   # Connector migration assembler
 ├── .github/
 │   └── workflows/
 │       ├── deploy-migrations.yml
@@ -308,6 +315,52 @@ supasaasy/
 ├── .env.local.example
 ├── deno.json
 └── README.md
+```
+
+## Connector Migrations
+
+Each connector includes its own migrations in a `migrations/` subdirectory. This keeps connectors self-contained and ensures that only migrations for configured connectors are applied to your database.
+
+### How It Works
+
+1. Each connector has a `migrations/` folder with numbered SQL files (e.g., `001_views.sql`)
+2. The assembly script reads your `supasaasy.config.ts` to identify configured connectors
+3. It generates a combined migration file containing only the migrations for your connectors
+4. This combined file is deployed alongside the core migrations
+
+### Running the Assembly Script
+
+Before deploying migrations (locally or in CI), run the assembly script:
+
+```bash
+deno run --allow-read --allow-write scripts/assemble-migrations.ts
+```
+
+This generates/updates `supabase/migrations/99999999999999_connector_migrations.sql`.
+
+**Important:** The generated file is committed to the repository. Regenerate it whenever you:
+- Add or remove connectors from your configuration
+- Update connector migration files
+
+### Adding Migrations to a Connector
+
+When creating or modifying a connector:
+
+1. Add SQL files to the connector's `migrations/` folder
+2. Use numbered prefixes for ordering (e.g., `001_`, `002_`)
+3. Use idempotent statements (`CREATE OR REPLACE`, `IF NOT EXISTS`)
+4. Run the assembly script to regenerate the combined migration
+
+Example migration structure:
+
+```
+connectors/
+  myconnector/
+    index.ts
+    types.ts
+    migrations/
+      001_views.sql
+      002_indexes.sql
 ```
 
 ## Deployment

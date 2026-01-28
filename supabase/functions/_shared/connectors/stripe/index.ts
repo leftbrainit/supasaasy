@@ -110,6 +110,19 @@ const SUPPORTED_RESOURCES: SupportedResource[] = [
 ];
 
 // =============================================================================
+// Migration Files
+// =============================================================================
+
+/**
+ * List of migration files included with this connector.
+ * These are assembled into the main migrations when the connector is configured.
+ * Files are applied in order (sorted by filename).
+ */
+const MIGRATION_FILES = [
+  '001_views.sql',
+];
+
+// =============================================================================
 // Connector Metadata
 // =============================================================================
 
@@ -120,6 +133,7 @@ const metadata: ConnectorMetadata = {
   apiVersion: DEFAULT_API_VERSION,
   supportedResources: SUPPORTED_RESOURCES,
   description: 'Syncs customers, products, prices, plans, subscriptions, and subscription items from Stripe',
+  migrations: MIGRATION_FILES,
 };
 
 // =============================================================================

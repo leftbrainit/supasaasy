@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'supabase/migrations/**'
+      - 'supabase/functions/_shared/connectors/**/migrations/**'
+      - 'config/supasaasy.config.ts'
   workflow_dispatch:
 
 jobs:
@@ -16,10 +18,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Assemble connector migrations
+        run: |
+          deno run --allow-read --allow-write scripts/assemble-migrations.ts
 
       - name: Link Supabase project
         run: |

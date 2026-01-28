@@ -95,6 +95,12 @@ export interface ConnectorMetadata {
   supportedResources: SupportedResource[];
   /** Description of the connector */
   description?: string;
+  /**
+   * List of migration file names in the connector's migrations/ folder.
+   * Files are applied in sorted order during migration assembly.
+   * All migrations should use idempotent statements (CREATE OR REPLACE, IF NOT EXISTS).
+   */
+  migrations?: string[];
 }
 
 // =============================================================================
