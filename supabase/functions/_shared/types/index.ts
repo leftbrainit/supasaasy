@@ -206,6 +206,22 @@ export interface WebhookPayload {
 // =============================================================================
 
 /**
+ * Progress information for sync operations
+ */
+export interface SyncProgress {
+  /** The resource type being synced */
+  resourceType: string;
+  /** The collection key being synced */
+  collectionKey: string;
+  /** Number of items fetched so far */
+  fetched: number;
+  /** Total number of items if known */
+  total?: number;
+  /** Current page number */
+  page: number;
+}
+
+/**
  * Options for sync operations
  */
 export interface SyncOptions {
@@ -219,6 +235,12 @@ export interface SyncOptions {
   resourceTypes?: string[];
   /** Maximum total records to sync (for testing/debugging) */
   limit?: number;
+  /** Dry-run mode - skips database writes, logs what would happen */
+  dryRun?: boolean;
+  /** Verbose mode - enables detailed per-item logging */
+  verbose?: boolean;
+  /** Progress callback - called after each batch is processed */
+  onProgress?: (progress: SyncProgress) => void;
 }
 
 /**

@@ -608,3 +608,81 @@ Deno.test('[Stripe] Created - entity data includes created timestamp', () => {
 
   assertEquals(entity.rawPayload.created, created);
 });
+
+// =============================================================================
+// Configuration Validation Tests
+// =============================================================================
+
+Deno.test('[Stripe] Validation - has validateConfig method', () => {
+  assertExists(stripeConnector.validateConfig);
+  assertEquals(typeof stripeConnector.validateConfig, 'function');
+});
+
+Deno.test('[Stripe] Validation - valid config passes validation', () => {
+  // Set environment variable for test
+  Deno.env.set('TEST_STRIPE_API_KEY', 'sk_test_123');
+
+  const config = createMockStripeAppConfig({
+    apiKeyEnv: 'TEST_STRIPE_API_KEY',
+  });
+
+  const result = stripeConnector.validateConfig(config);
+
+  assertEquals(result.valid, true);
+  assertEquals(result.errors.length, 0);
+
+  // Clean up
+  Deno.env.delete('TEST_STRIPE_API_KEY');
+});
+
+Deno.test('[Stripe] Validation - rejects invalid resource types', () => {
+  // Set environment variable so API key validation passes
+  Deno.env.set('TEST_STRIPE_API_KEY', 'sk_test_123');
+
+  const config = createMockStripeAppConfig({
+    apiKeyEnv: 'TEST_STRIPE_API_KEY',
+    syncResources: ['customer', 'invalid_resource' as unknown as import('../types.ts').StripeResourceType],
+  });
+
+  const result = stripeConnector.validateConfig(config);
+
+  assertEquals(result.valid, false);
+  assertEquals(result.errors.length, 1);
+  assertEquals(result.errors[0].field, 'sync_resources');
+  assertEquals(result.errors[0].message.includes('invalid_resource'), true);
+
+  Deno.env.delete('TEST_STRIPE_API_KEY');
+});
+
+Deno.test('[Stripe] Validation - rejects invalid sync_from date', () => {
+  Deno.env.set('TEST_STRIPE_API_KEY', 'sk_test_123');
+
+  const config = createMockStripeAppConfig({
+    apiKeyEnv: 'TEST_STRIPE_API_KEY',
+    syncFrom: 'not-a-valid-date',
+  });
+
+  const result = stripeConnector.validateConfig(config);
+
+  assertEquals(result.valid, false);
+  const syncFromError = result.errors.find((e) => e.field === 'sync_from');
+  assertExists(syncFromError);
+  assertEquals(syncFromError.message.includes('Invalid date format'), true);
+
+  Deno.env.delete('TEST_STRIPE_API_KEY');
+});
+
+Deno.test('[Stripe] Validation - accepts valid sync_from date', () => {
+  Deno.env.set('TEST_STRIPE_API_KEY', 'sk_test_123');
+
+  const config = createMockStripeAppConfig({
+    apiKeyEnv: 'TEST_STRIPE_API_KEY',
+    syncFrom: '2024-01-01T00:00:00Z',
+  });
+
+  const result = stripeConnector.validateConfig(config);
+
+  assertEquals(result.valid, true);
+
+  Deno.env.delete('TEST_STRIPE_API_KEY');
+});

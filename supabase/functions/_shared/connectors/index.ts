@@ -17,8 +17,46 @@ import type {
 import { getConfig } from '../config.ts';
 
 // =============================================================================
+// Configuration Validation Types
+// =============================================================================
+
+/**
+ * A single validation error for a configuration field
+ */
+export interface ConfigValidationError {
+  /** The configuration field that has an error */
+  field: string;
+  /** Description of what is wrong */
+  message: string;
+  /** Suggestion for how to fix */
+  suggestion?: string;
+}
+
+/**
+ * Result of configuration validation
+ */
+export interface ConfigValidationResult {
+  /** Whether the configuration is valid */
+  valid: boolean;
+  /** List of validation errors if invalid */
+  errors: ConfigValidationError[];
+}
+
+// =============================================================================
 // Connector Interfaces
 // =============================================================================
+
+/**
+ * Configuration validator interface
+ */
+export interface ConfigValidator {
+  /**
+   * Validate connector configuration
+   * @param config The app configuration to validate
+   * @returns Validation result with any errors
+   */
+  validateConfig(config: AppConfig): ConfigValidationResult;
+}
 
 /**
  * Webhook handler interface for processing incoming webhooks
@@ -129,12 +167,26 @@ export interface Connector extends WebhookHandler, SyncHandler {
 export interface IncrementalConnector extends Connector, IncrementalSyncHandler {}
 
 /**
+ * Connector with configuration validation support
+ */
+export interface ValidatableConnector extends Connector, ConfigValidator {}
+
+/**
  * Type guard to check if a connector supports incremental sync
  */
 export function supportsIncrementalSync(
   connector: Connector,
 ): connector is IncrementalConnector {
   return 'incrementalSync' in connector;
+}
+
+/**
+ * Type guard to check if a connector supports configuration validation
+ */
+export function supportsConfigValidation(
+  connector: Connector,
+): connector is ValidatableConnector {
+  return 'validateConfig' in connector && typeof (connector as ValidatableConnector).validateConfig === 'function';
 }
 
 // =============================================================================
@@ -193,12 +245,43 @@ export async function getConnector(name: string): Promise<Connector | undefined>
 }
 
 /**
+ * Validate a connector's configuration and throw if invalid
+ * @param connector The connector to validate
+ * @param appConfig The app configuration to validate
+ * @throws ConfigurationError if validation fails
+ */
+export function validateConnectorConfig(
+  connector: Connector,
+  appConfig: AppConfig,
+): void {
+  if (!supportsConfigValidation(connector)) {
+    return; // No validation available, skip
+  }
+
+  const result = connector.validateConfig(appConfig);
+  if (!result.valid && result.errors.length > 0) {
+    const errorMessages = result.errors.map((e) => {
+      let msg = `${e.field}: ${e.message}`;
+      if (e.suggestion) {
+        msg += ` (${e.suggestion})`;
+      }
+      return msg;
+    });
+    throw new Error(
+      `Configuration validation failed for ${appConfig.app_key}:\n  - ${errorMessages.join('\n  - ')}`,
+    );
+  }
+}
+
+/**
  * Get a connector for a specific app_key by looking up the configuration
  * @param appKey The app_key from the webhook URL or sync request
+ * @param options Options for connector retrieval
  * @returns The connector instance or undefined if not found
  */
 export async function getConnectorForAppKey(
   appKey: string,
+  options: { skipValidation?: boolean } = {},
 ): Promise<Connector | undefined> {
   const config = getConfig();
   const appConfig = config.apps.find((app) => app.app_key === appKey);
@@ -214,6 +297,11 @@ export async function getConnectorForAppKey(
       `No connector registered for provider: ${appConfig.connector}`,
     );
     return undefined;
+  }
+
+  // Validate configuration unless skipped
+  if (!options.skipValidation) {
+    validateConnectorConfig(connector, appConfig);
   }
 
   return connector;

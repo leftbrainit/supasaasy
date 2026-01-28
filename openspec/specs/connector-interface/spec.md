@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change 03-add-connector-interface. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Connector Metadata
 
 Each connector SHALL provide metadata describing its capabilities and supported resources.
@@ -219,3 +217,185 @@ Connectors SHALL support an optional `sync_from` configuration to limit historic
 
 - **WHEN** an app instance does not have `sync_from` set
 - **THEN** full sync SHALL fetch all historical records as before
+
+### Requirement: Connector Module Organization
+
+Connectors SHALL organize code into logical modules to improve maintainability and testability.
+
+#### Scenario: Connector has client module
+
+- **WHEN** a connector needs to create API clients
+- **THEN** client creation logic SHALL be in a dedicated `client.ts` module
+- **AND** the module SHALL export functions for client instantiation and configuration
+
+#### Scenario: Connector has normalization module
+
+- **WHEN** a connector normalizes API responses to entities
+- **THEN** normalization logic SHALL be in a dedicated `normalization.ts` module
+- **AND** the module SHALL export the `normalizeEntity` function and related helpers
+
+#### Scenario: Connector has webhooks module
+
+- **WHEN** a connector handles webhooks
+- **THEN** webhook logic SHALL be in a dedicated `webhooks.ts` module
+- **AND** the module SHALL export `verifyWebhook`, `parseWebhookEvent`, and `extractEntity` functions
+
+#### Scenario: Connector has sync module
+
+- **WHEN** a connector performs data synchronization
+- **THEN** sync logic SHALL be organized in a `sync/` directory
+- **AND** orchestration logic SHALL be in `sync/index.ts`
+- **AND** resource-specific sync functions MAY be in separate files
+
+#### Scenario: Connector index re-exports
+
+- **WHEN** the main `index.ts` is imported
+- **THEN** it SHALL re-export the connector object and metadata
+- **AND** it SHALL handle connector registration with the registry
+
+### Requirement: Paginated Sync Utility
+
+The system SHALL provide a generic utility for paginated API synchronization.
+
+#### Scenario: Utility handles pagination loop
+
+- **WHEN** `paginatedSync()` is called with a list function
+- **THEN** it SHALL iterate through all pages using cursor-based pagination
+- **AND** it SHALL call the normalize function for each item
+- **AND** it SHALL batch upsert entities to the database
+
+#### Scenario: Utility tracks timing and results
+
+- **WHEN** a paginated sync completes
+- **THEN** it SHALL return a `SyncResult` with created, updated, deleted, errors counts
+- **AND** it SHALL include `durationMs` for the total operation time
+
+#### Scenario: Utility handles sync_from filter
+
+- **WHEN** `paginatedSync()` is called with a `syncFromTimestamp`
+- **THEN** it SHALL pass the timestamp to the list function
+- **AND** only records created after the timestamp SHALL be fetched
+
+#### Scenario: Utility detects deletions during full sync
+
+- **WHEN** a full sync is performed with `existingIds` provided
+- **THEN** the utility SHALL detect IDs present in `existingIds` but not in the API response
+- **AND** those entities SHALL be deleted from the database
+
+#### Scenario: Utility respects pagination limits
+
+- **WHEN** `options.limit` is specified
+- **THEN** the utility SHALL stop fetching after the limit is reached
+- **AND** it SHALL not fetch unnecessary pages
+
+#### Scenario: Utility handles errors gracefully
+
+- **WHEN** an error occurs during sync
+- **THEN** the utility SHALL catch the error
+- **AND** it SHALL return a failed `SyncResult` with error messages
+- **AND** partial progress SHALL be preserved
+
+### Requirement: Dry-Run Sync Mode
+
+Connectors SHALL support a dry-run mode for testing sync operations without database writes.
+
+#### Scenario: Dry-run skips database writes
+
+- **WHEN** a sync is performed with `dryRun: true`
+- **THEN** the connector SHALL fetch data from the API
+- **AND** the connector SHALL normalize entities
+- **AND** the connector SHALL NOT write to the database
+
+#### Scenario: Dry-run logs intended operations
+
+- **WHEN** a sync is performed with `dryRun: true`
+- **THEN** the connector SHALL log what would be created, updated, or deleted
+- **AND** the log SHALL include entity external IDs and collection keys
+
+#### Scenario: Dry-run returns accurate counts
+
+- **WHEN** a dry-run sync completes
+- **THEN** the `SyncResult` SHALL reflect what would have been created/updated/deleted
+- **AND** the counts SHALL match a real sync operation
+
+### Requirement: Sync Progress Reporting
+
+Connectors SHALL support progress callbacks for monitoring long-running syncs.
+
+#### Scenario: Progress callback invoked per batch
+
+- **WHEN** a sync is performed with `onProgress` callback
+- **THEN** the callback SHALL be invoked after each batch is processed
+- **AND** the callback SHALL receive progress information
+
+#### Scenario: Progress includes resource and counts
+
+- **WHEN** the `onProgress` callback is invoked
+- **THEN** it SHALL receive the resource type being synced
+- **AND** it SHALL receive the number of items fetched so far
+- **AND** it MAY receive the total count if known
+
+### Requirement: Verbose Logging Mode
+
+Connectors SHALL support verbose logging for detailed debugging.
+
+#### Scenario: Verbose mode logs each entity
+
+- **WHEN** a sync is performed with `verbose: true`
+- **THEN** the connector SHALL log each entity being processed
+- **AND** the log SHALL include the external ID and key fields
+
+#### Scenario: Verbose mode disabled by default
+
+- **WHEN** a sync is performed without `verbose` option
+- **THEN** per-entity logging SHALL NOT occur
+- **AND** only summary logs SHALL be emitted
+
+### Requirement: Connector Configuration Validation
+
+Connectors SHALL validate their configuration before operations.
+
+#### Scenario: Validation method available
+
+- **WHEN** a connector is registered
+- **THEN** it MAY provide a `validateConfig(appConfig)` method
+- **AND** the method SHALL return validation results with any errors
+
+#### Scenario: Validation called on initialization
+
+- **WHEN** `getConnectorForAppKey` is called
+- **THEN** the connector's `validateConfig` method SHALL be called if present
+- **AND** a `ConfigurationError` SHALL be thrown if validation fails
+
+#### Scenario: API key validation
+
+- **WHEN** validating a connector that requires an API key
+- **THEN** the validator SHALL check that the configured environment variable exists
+- **OR** a direct API key is provided
+- **AND** an error SHALL be returned if neither is available
+
+#### Scenario: Webhook secret validation
+
+- **WHEN** validating a connector for an app that receives webhooks
+- **THEN** the validator SHALL check that a webhook secret is configured
+- **AND** an error SHALL be returned if the secret is missing
+
+#### Scenario: Resource type validation
+
+- **WHEN** validating `sync_resources` configuration
+- **THEN** the validator SHALL check each resource type is supported
+- **AND** an error SHALL be returned for unknown resource types
+
+#### Scenario: Date format validation
+
+- **WHEN** validating `sync_from` configuration
+- **THEN** the validator SHALL check the value is a valid ISO 8601 date string
+- **AND** an error SHALL be returned if the format is invalid
+
+#### Scenario: Validation errors are actionable
+
+- **WHEN** a validation error occurs
+- **THEN** the error message SHALL identify the specific field
+- **AND** the message SHALL describe what is wrong
+- **AND** the message SHALL suggest how to fix it
+

@@ -11,7 +11,8 @@
     "check": "deno check supabase/functions/_shared/**/*.ts config/*.ts",
     "test": "deno test --allow-env --allow-read --allow-net supabase/functions/_shared/",
     "test:watch": "deno test --allow-env --allow-read --allow-net --watch supabase/functions/_shared/",
-    "test:coverage": "deno test --allow-env --allow-read --allow-net --coverage=coverage supabase/functions/_shared/ && deno coverage coverage"
+    "test:coverage": "deno test --allow-env --allow-read --allow-net --coverage=coverage supabase/functions/_shared/ && deno coverage coverage",
+    "new-connector": "deno run --allow-read --allow-write scripts/new-connector.ts"
   },
   "compilerOptions": {
     "strict": true,

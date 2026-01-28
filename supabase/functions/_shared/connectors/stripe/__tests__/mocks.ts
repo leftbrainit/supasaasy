@@ -543,7 +543,9 @@ export function createMockListResponse<T>(
 export interface MockStripeAppConfigOptions {
   appKey?: string;
   apiKey?: string;
+  apiKeyEnv?: string;
   webhookSecret?: string;
+  webhookSecretEnv?: string;
   syncResources?: StripeResourceType[];
   syncFrom?: string;
 }
@@ -554,19 +556,27 @@ export interface MockStripeAppConfigOptions {
 export function createMockStripeAppConfig(options: MockStripeAppConfigOptions = {}) {
   const {
     appKey = 'stripe_test',
-    apiKey = 'sk_test_mock',
-    webhookSecret = 'whsec_test_mock',
+    apiKey,
+    apiKeyEnv,
+    webhookSecret,
+    webhookSecretEnv,
     syncResources,
     syncFrom,
   } = options;
+
+  // Default to direct API key if no env var specified
+  const defaultApiKey = !apiKeyEnv ? (apiKey ?? 'sk_test_mock') : undefined;
+  const defaultWebhookSecret = !webhookSecretEnv ? (webhookSecret ?? 'whsec_test_mock') : undefined;
 
   return {
     app_key: appKey,
     name: 'Stripe Test',
     connector: 'stripe',
     config: {
-      api_key: apiKey,
-      webhook_secret: webhookSecret,
+      ...(defaultApiKey && { api_key: defaultApiKey }),
+      ...(apiKeyEnv && { api_key_env: apiKeyEnv }),
+      ...(defaultWebhookSecret && { webhook_secret: defaultWebhookSecret }),
+      ...(webhookSecretEnv && { webhook_secret_env: webhookSecretEnv }),
       ...(syncResources && { sync_resources: syncResources }),
       ...(syncFrom && { sync_from: syncFrom }),
     },

@@ -247,6 +247,230 @@ export function mergeSyncResults(results: SyncResult[]): SyncResult {
 }
 
 // =============================================================================
+// Paginated Sync Utility
+// =============================================================================
+
+/**
+ * Progress information for sync operations
+ */
+export interface SyncProgress {
+  /** The resource type being synced */
+  resourceType: string;
+  /** The collection key being synced */
+  collectionKey: string;
+  /** Number of items fetched so far */
+  fetched: number;
+  /** Total number of items if known */
+  total?: number;
+  /** Current page number */
+  page: number;
+}
+
+/**
+ * Paginated response structure from an API
+ */
+export interface PaginatedResponse<T> {
+  /** The items in this page */
+  data: T[];
+  /** Whether there are more pages */
+  hasMore: boolean;
+  /** Cursor for next page if applicable */
+  nextCursor?: string;
+}
+
+/**
+ * Configuration for paginated sync operations
+ */
+export interface PaginatedSyncConfig<T> {
+  /** Name of the connector (for logging) */
+  connectorName: string;
+  /** Resource type being synced */
+  resourceType: string;
+  /** Collection key for the database */
+  collectionKey: string;
+  /** App key for the database */
+  appKey: string;
+
+  /** Function to list a page of items from the API */
+  listPage: (cursor?: string) => Promise<PaginatedResponse<T>>;
+
+  /** Function to get the ID from an item */
+  getId: (item: T) => string;
+
+  /** Function to normalize an item to a NormalizedEntity */
+  normalize: (item: T) => NormalizedEntity;
+
+  /** Function to upsert entities to the database */
+  upsertBatch: (entities: NormalizedEntity[]) => Promise<{ error?: Error }>;
+
+  /** Function to delete an entity from the database */
+  deleteEntity: (externalId: string) => Promise<{ error?: Error }>;
+
+  /** Page size for API requests */
+  pageSize?: number;
+
+  /** Maximum total records to sync */
+  limit?: number;
+
+  /** Starting cursor for pagination */
+  cursor?: string;
+
+  /** Existing IDs for deletion detection (full sync only) */
+  existingIds?: Set<string>;
+
+  /** Progress callback */
+  onProgress?: (progress: SyncProgress) => void;
+
+  /** Dry run mode - don't write to database */
+  dryRun?: boolean;
+
+  /** Verbose logging mode */
+  verbose?: boolean;
+
+  /** Logger instance */
+  logger?: ReturnType<typeof createConnectorLogger>;
+}
+
+/**
+ * Generic paginated sync utility for any API with cursor-based pagination.
+ *
+ * Handles:
+ * - Cursor-based pagination loop
+ * - Timer tracking and result aggregation
+ * - Error handling with consistent error messages
+ * - Deletion detection for full syncs
+ * - Batch upserts to database
+ * - Progress callbacks
+ * - Dry-run mode
+ *
+ * @param config Configuration for the sync operation
+ * @returns SyncResult with counts and timing
+ */
+export async function paginatedSync<T>(
+  config: PaginatedSyncConfig<T>,
+): Promise<SyncResult> {
+  const result = emptySyncResult();
+  const timer = createTimer();
+  const seenIds = new Set<string>();
+  let cursor = config.cursor;
+  let page = 0;
+
+  const log = config.logger ?? createConnectorLogger(config.connectorName);
+
+  try {
+    let hasMore = true;
+
+    while (hasMore) {
+      page++;
+
+      // Fetch a page from the API
+      const response = await config.listPage(cursor);
+
+      // Process items in this page
+      const entities: NormalizedEntity[] = [];
+
+      for (const item of response.data) {
+        const id = config.getId(item);
+        seenIds.add(id);
+
+        const entity = config.normalize(item);
+        entities.push(entity);
+
+        if (config.verbose) {
+          log.debug(
+            'sync',
+            `Processing ${config.resourceType} ${id}`,
+            { externalId: id, collectionKey: config.collectionKey },
+          );
+        }
+      }
+
+      // Upsert batch (unless dry-run)
+      if (entities.length > 0) {
+        if (config.dryRun) {
+          log.info(
+            'sync',
+            `[DRY-RUN] Would upsert ${entities.length} ${config.resourceType}(s)`,
+            { count: entities.length, ids: entities.map((e) => e.externalId) },
+          );
+          result.created += entities.length;
+        } else {
+          const { error } = await config.upsertBatch(entities);
+          if (error) {
+            result.errors++;
+            result.errorMessages = result.errorMessages || [];
+            result.errorMessages.push(error.message);
+            log.error('sync', `Failed to upsert ${config.resourceType}(s): ${error.message}`);
+          } else {
+            result.created += entities.length;
+          }
+        }
+      }
+
+      // Report progress
+      if (config.onProgress) {
+        config.onProgress({
+          resourceType: config.resourceType,
+          collectionKey: config.collectionKey,
+          fetched: seenIds.size,
+          page,
+        });
+      }
+
+      // Check pagination
+      hasMore = response.hasMore;
+      cursor = response.nextCursor;
+
+      // Check limit
+      if (config.limit && seenIds.size >= config.limit) {
+        log.info('sync', `Reached limit of ${config.limit} ${config.resourceType}(s)`);
+        break;
+      }
+    }
+
+    // Detect deletions during full sync
+    if (config.existingIds) {
+      for (const existingId of config.existingIds) {
+        if (!seenIds.has(existingId)) {
+          if (config.dryRun) {
+            log.info(
+              'sync',
+              `[DRY-RUN] Would delete ${config.resourceType} ${existingId}`,
+              { externalId: existingId },
+            );
+            result.deleted++;
+          } else {
+            const { error } = await config.deleteEntity(existingId);
+            if (error) {
+              result.errors++;
+            } else {
+              result.deleted++;
+            }
+          }
+        }
+      }
+    }
+
+    result.durationMs = timer.elapsed();
+
+    log.info(
+      'sync',
+      `Completed ${config.resourceType} sync: ${result.created} upserted, ${result.deleted} deleted`,
+      { created: result.created, deleted: result.deleted, durationMs: result.durationMs },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.success = false;
+    result.errors++;
+    result.errorMessages = result.errorMessages || [];
+    result.errorMessages.push(message);
+    log.error('sync', `${config.resourceType} sync failed: ${message}`);
+  }
+
+  return result;
+}
+
+// =============================================================================
 // Logging Utilities
 // =============================================================================
 
