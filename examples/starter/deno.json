@@ -10,8 +10,5 @@
   },
   "imports": {
     "supasaasy": "../../packages/supasaasy/mod.ts"
-  },
-  "compilerOptions": {
-    "strict": true
   }
 }
