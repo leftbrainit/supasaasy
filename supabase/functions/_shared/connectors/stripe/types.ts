@@ -87,6 +87,12 @@ export interface StripeAppConfig {
   webhook_secret?: string;
   /** Resource types to sync (defaults to all) */
   sync_resources?: StripeResourceType[];
+  /**
+   * Optional minimum timestamp for historical data sync (ISO 8601 string).
+   * When set, full sync will only fetch records created on or after this date.
+   * Example: "2024-01-01T00:00:00Z"
+   */
+  sync_from?: string;
 }
 
 // =============================================================================

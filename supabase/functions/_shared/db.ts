@@ -356,6 +356,50 @@ export async function getEntityExternalIds(
   }
 }
 
+/**
+ * Get entity external IDs for records created on or after a given timestamp.
+ * The creation timestamp is extracted from the raw_payload 'created' field (Unix timestamp in seconds).
+ * Useful for deletion detection when sync_from is configured.
+ *
+ * @param app_key The app instance identifier
+ * @param collection_key The collection/resource type
+ * @param createdGte Minimum creation timestamp (Unix seconds)
+ * @returns Set of external IDs for records created >= createdGte
+ */
+export async function getEntityExternalIdsCreatedAfter(
+  app_key: string,
+  collection_key: string,
+  createdGte: number
+): Promise<{ data: Set<string> | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const { data, error } = await client
+      .from('entities')
+      .select('external_id, raw_payload')
+      .eq('app_key', app_key)
+      .eq('collection_key', collection_key);
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    // Filter entities where raw_payload.created >= createdGte
+    const ids = new Set(
+      (data as Array<{ external_id: string; raw_payload: Record<string, unknown> }>)
+        .filter((e) => {
+          const created = e.raw_payload?.created;
+          return typeof created === 'number' && created >= createdGte;
+        })
+        .map((e) => e.external_id)
+    );
+
+    return { data: ids, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
 // =============================================================================
 // Sync State Types
 // =============================================================================

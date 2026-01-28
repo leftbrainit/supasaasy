@@ -36,6 +36,10 @@ const config: SupaSaaSyConfig = {
     //     // Resources to sync (defaults to all if not specified)
     //     // sync_resources: ['customer', 'product', 'price', 'subscription'],
     //   },
+    //   // Optional: Limit historical data sync to records created on or after this date.
+    //   // Useful for new deployments to avoid syncing years of historical data.
+    //   // Format: ISO 8601 date string (e.g., "2024-01-01T00:00:00Z")
+    //   // sync_from: '2024-01-01T00:00:00Z',
     // },
 
     // ==========================================================================

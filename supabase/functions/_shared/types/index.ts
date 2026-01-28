@@ -20,6 +20,13 @@ export interface AppConfig {
   connector: string;
   /** Connector-specific configuration */
   config: Record<string, unknown>;
+  /**
+   * Optional minimum timestamp for historical data sync.
+   * When set, full sync will only fetch records created on or after this date.
+   * Accepts ISO 8601 date string (e.g., "2024-01-01T00:00:00Z") or Date object.
+   * Does not affect incremental sync behavior.
+   */
+  sync_from?: string | Date;
 }
 
 /**

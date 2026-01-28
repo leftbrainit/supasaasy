@@ -39,6 +39,7 @@ import {
   upsertEntities,
   deleteEntity,
   getEntityExternalIds,
+  getEntityExternalIdsCreatedAfter,
   type UpsertEntityData,
 } from '../../db.ts';
 import {
@@ -218,6 +219,37 @@ function getResourceTypesToSync(appConfig: AppConfig): StripeResourceType[] {
   }
   // Default to all resources except subscription_item (synced with subscriptions)
   return ['customer', 'product', 'price', 'plan', 'subscription'];
+}
+
+/**
+ * Get sync_from timestamp from app config if configured.
+ * Returns the timestamp as a Unix timestamp (seconds) for Stripe API.
+ * sync_from can be set on the AppConfig or in the connector-specific config.
+ */
+function getSyncFromTimestamp(appConfig: AppConfig): number | undefined {
+  // Check AppConfig.sync_from first
+  if (appConfig.sync_from) {
+    const date = typeof appConfig.sync_from === 'string'
+      ? new Date(appConfig.sync_from)
+      : appConfig.sync_from;
+    
+    if (!isNaN(date.getTime())) {
+      return Math.floor(date.getTime() / 1000);
+    }
+    logger.warn('config', `Invalid sync_from date in AppConfig: ${appConfig.sync_from}`);
+  }
+
+  // Check connector-specific config
+  const config = getStripeConfig(appConfig);
+  if (config.sync_from) {
+    const date = new Date(config.sync_from);
+    if (!isNaN(date.getTime())) {
+      return Math.floor(date.getTime() / 1000);
+    }
+    logger.warn('config', `Invalid sync_from date in StripeAppConfig: ${config.sync_from}`);
+  }
+
+  return undefined;
 }
 
 // =============================================================================
@@ -485,7 +517,8 @@ async function syncCustomers(
   stripe: Stripe,
   appConfig: AppConfig,
   options: SyncOptions,
-  existingIds?: Set<string>
+  existingIds?: Set<string>,
+  syncFromTimestamp?: number
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -494,13 +527,18 @@ async function syncCustomers(
   const since = options.since;
   const seenIds = new Set<string>();
 
+  // For full sync, use syncFromTimestamp as the floor if configured
+  const createdGte = since
+    ? Math.floor(since.getTime() / 1000)
+    : syncFromTimestamp;
+
   try {
     let hasMore = true;
     while (hasMore) {
       const params: Stripe.CustomerListParams = {
         limit: pageSize,
         ...(cursor && { starting_after: cursor }),
-        ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
+        ...(createdGte && { created: { gte: createdGte } }),
       };
 
       const customers = await stripe.customers.list(params);
@@ -538,7 +576,7 @@ async function syncCustomers(
       }
     }
 
-    // Detect deletions during full sync
+    // Detect deletions during full sync (only for records in sync window)
     if (!since && existingIds) {
       for (const existingId of existingIds) {
         if (!seenIds.has(existingId)) {
@@ -574,7 +612,8 @@ async function syncProducts(
   stripe: Stripe,
   appConfig: AppConfig,
   options: SyncOptions,
-  existingIds?: Set<string>
+  existingIds?: Set<string>,
+  syncFromTimestamp?: number
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -583,13 +622,18 @@ async function syncProducts(
   const since = options.since;
   const seenIds = new Set<string>();
 
+  // For full sync, use syncFromTimestamp as the floor if configured
+  const createdGte = since
+    ? Math.floor(since.getTime() / 1000)
+    : syncFromTimestamp;
+
   try {
     let hasMore = true;
     while (hasMore) {
       const params: Stripe.ProductListParams = {
         limit: pageSize,
         ...(cursor && { starting_after: cursor }),
-        ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
+        ...(createdGte && { created: { gte: createdGte } }),
         // Include inactive products
         active: undefined,
       };
@@ -628,7 +672,7 @@ async function syncProducts(
       }
     }
 
-    // Detect deletions during full sync
+    // Detect deletions during full sync (only for records in sync window)
     if (!since && existingIds) {
       for (const existingId of existingIds) {
         if (!seenIds.has(existingId)) {
@@ -664,7 +708,8 @@ async function syncPrices(
   stripe: Stripe,
   appConfig: AppConfig,
   options: SyncOptions,
-  existingIds?: Set<string>
+  existingIds?: Set<string>,
+  syncFromTimestamp?: number
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -673,13 +718,18 @@ async function syncPrices(
   const since = options.since;
   const seenIds = new Set<string>();
 
+  // For full sync, use syncFromTimestamp as the floor if configured
+  const createdGte = since
+    ? Math.floor(since.getTime() / 1000)
+    : syncFromTimestamp;
+
   try {
     let hasMore = true;
     while (hasMore) {
       const params: Stripe.PriceListParams = {
         limit: pageSize,
         ...(cursor && { starting_after: cursor }),
-        ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
+        ...(createdGte && { created: { gte: createdGte } }),
         // Include inactive prices
         active: undefined,
       };
@@ -718,7 +768,7 @@ async function syncPrices(
       }
     }
 
-    // Detect deletions during full sync
+    // Detect deletions during full sync (only for records in sync window)
     if (!since && existingIds) {
       for (const existingId of existingIds) {
         if (!seenIds.has(existingId)) {
@@ -754,7 +804,8 @@ async function syncPlans(
   stripe: Stripe,
   appConfig: AppConfig,
   options: SyncOptions,
-  existingIds?: Set<string>
+  existingIds?: Set<string>,
+  syncFromTimestamp?: number
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -763,13 +814,18 @@ async function syncPlans(
   const since = options.since;
   const seenIds = new Set<string>();
 
+  // For full sync, use syncFromTimestamp as the floor if configured
+  const createdGte = since
+    ? Math.floor(since.getTime() / 1000)
+    : syncFromTimestamp;
+
   try {
     let hasMore = true;
     while (hasMore) {
       const params: Stripe.PlanListParams = {
         limit: pageSize,
         ...(cursor && { starting_after: cursor }),
-        ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
+        ...(createdGte && { created: { gte: createdGte } }),
         // Include inactive plans
         active: undefined,
       };
@@ -808,7 +864,7 @@ async function syncPlans(
       }
     }
 
-    // Detect deletions during full sync
+    // Detect deletions during full sync (only for records in sync window)
     if (!since && existingIds) {
       for (const existingId of existingIds) {
         if (!seenIds.has(existingId)) {
@@ -898,7 +954,8 @@ async function syncSubscriptions(
   appConfig: AppConfig,
   options: SyncOptions,
   existingIds?: Set<string>,
-  existingItemIds?: Set<string>
+  existingItemIds?: Set<string>,
+  syncFromTimestamp?: number
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
@@ -908,13 +965,18 @@ async function syncSubscriptions(
   const seenIds = new Set<string>();
   const seenItemIds = new Set<string>();
 
+  // For full sync, use syncFromTimestamp as the floor if configured
+  const createdGte = since
+    ? Math.floor(since.getTime() / 1000)
+    : syncFromTimestamp;
+
   try {
     let hasMore = true;
     while (hasMore) {
       const params: Stripe.SubscriptionListParams = {
         limit: pageSize,
         ...(cursor && { starting_after: cursor }),
-        ...(since && { created: { gte: Math.floor(since.getTime() / 1000) } }),
+        ...(createdGte && { created: { gte: createdGte } }),
         // Include all subscription statuses
         status: 'all',
       };
@@ -992,7 +1054,7 @@ async function syncSubscriptions(
       }
     }
 
-    // Detect deletions during full sync
+    // Detect deletions during full sync (only for records in sync window)
     if (!since && existingIds) {
       for (const existingId of existingIds) {
         if (!seenIds.has(existingId)) {
@@ -1010,7 +1072,7 @@ async function syncSubscriptions(
       }
     }
 
-    // Detect deleted subscription items during full sync
+    // Detect deleted subscription items during full sync (only for records in sync window)
     if (!since && existingItemIds) {
       for (const existingId of existingItemIds) {
         if (!seenItemIds.has(existingId)) {
@@ -1050,6 +1112,13 @@ async function fullSync(
   const timer = createTimer();
   const stripe = createStripeClient(appConfig);
   const resourceTypes = options.resourceTypes || getResourceTypesToSync(appConfig);
+  const syncFromTimestamp = getSyncFromTimestamp(appConfig);
+
+  // Log if sync_from is active
+  if (syncFromTimestamp) {
+    const syncFromDate = new Date(syncFromTimestamp * 1000).toISOString();
+    logger.info('sync', `sync_from configured: syncing records created on or after ${syncFromDate}`);
+  }
 
   logger.syncStarted('full', resourceTypes);
 
@@ -1057,36 +1126,47 @@ async function fullSync(
 
   for (const resourceType of resourceTypes) {
     // Get existing IDs for deletion detection
+    // When sync_from is configured, only get IDs of records created after that timestamp
     const collectionKey = STRIPE_COLLECTION_KEYS[resourceType as StripeResourceType];
-    const { data: existingIds } = await getEntityExternalIds(appConfig.app_key, collectionKey);
+    const { data: existingIds } = syncFromTimestamp
+      ? await getEntityExternalIdsCreatedAfter(appConfig.app_key, collectionKey, syncFromTimestamp)
+      : await getEntityExternalIds(appConfig.app_key, collectionKey);
 
     let syncResult: SyncResult;
 
     switch (resourceType) {
       case 'customer':
-        syncResult = await syncCustomers(stripe, appConfig, options, existingIds ?? undefined);
+        syncResult = await syncCustomers(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
         break;
       case 'product':
-        syncResult = await syncProducts(stripe, appConfig, options, existingIds ?? undefined);
+        syncResult = await syncProducts(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
         break;
       case 'price':
-        syncResult = await syncPrices(stripe, appConfig, options, existingIds ?? undefined);
+        syncResult = await syncPrices(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
         break;
       case 'plan':
-        syncResult = await syncPlans(stripe, appConfig, options, existingIds ?? undefined);
+        syncResult = await syncPlans(stripe, appConfig, options, existingIds ?? undefined, syncFromTimestamp);
         break;
       case 'subscription': {
-        // Also get existing subscription item IDs
-        const { data: existingItemIds } = await getEntityExternalIds(
-          appConfig.app_key,
-          STRIPE_COLLECTION_KEYS.subscription_item
-        );
+        // Also get existing subscription item IDs (filtered by sync_from if configured)
+        // Note: subscription items don't have their own 'created' field, so we filter by parent subscription
+        const { data: existingItemIds } = syncFromTimestamp
+          ? await getEntityExternalIdsCreatedAfter(
+              appConfig.app_key,
+              STRIPE_COLLECTION_KEYS.subscription_item,
+              syncFromTimestamp
+            )
+          : await getEntityExternalIds(
+              appConfig.app_key,
+              STRIPE_COLLECTION_KEYS.subscription_item
+            );
         syncResult = await syncSubscriptions(
           stripe,
           appConfig,
           options,
           existingIds ?? undefined,
-          existingItemIds ?? undefined
+          existingItemIds ?? undefined,
+          syncFromTimestamp
         );
         break;
       }
