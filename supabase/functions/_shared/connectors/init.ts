@@ -8,6 +8,7 @@
 
 // Import all connector modules to trigger their self-registration
 import './stripe/index.ts';
+import './intercom/index.ts';
 
 // Re-export main connector functions for convenience
 export {

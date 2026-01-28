@@ -116,6 +116,7 @@ The system SHALL provide a registry for connector lookup.
 
 - **WHEN** the system needs a connector by provider name
 - **THEN** `getConnector("stripe")` SHALL return the Stripe connector
+- **AND** `getConnector("intercom")` SHALL return the Intercom connector
 
 #### Scenario: Lookup by app_key
 
