@@ -491,12 +491,25 @@ export interface LogEntry {
   data?: Record<string, unknown>;
 }
 
+/** Logger interface returned by createConnectorLogger */
+export interface ConnectorLogger {
+  debug: (operation: string, message: string, data?: Record<string, unknown>) => LogEntry;
+  info: (operation: string, message: string, data?: Record<string, unknown>) => LogEntry;
+  warn: (operation: string, message: string, data?: Record<string, unknown>) => LogEntry;
+  error: (operation: string, message: string, data?: Record<string, unknown>) => LogEntry;
+  webhookReceived: (eventType: string, externalId?: string) => LogEntry;
+  webhookProcessed: (eventType: string, externalId: string, success: boolean) => LogEntry;
+  syncStarted: (syncType: 'full' | 'incremental', resourceTypes?: string[]) => LogEntry;
+  syncCompleted: (result: SyncResult) => LogEntry;
+  syncFailed: (error: Error) => LogEntry;
+}
+
 /**
  * Create a connector-scoped logger
  * @param connectorName The connector name for log context
  * @returns Logger object with level methods
  */
-export function createConnectorLogger(connectorName: string) {
+export function createConnectorLogger(connectorName: string): ConnectorLogger {
   const log = (
     level: LogLevel,
     operation: string,
