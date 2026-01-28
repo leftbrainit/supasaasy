@@ -1,8 +1,11 @@
 # testing-infrastructure Specification
 
 ## Purpose
+
 TBD - created by archiving change add-unit-testing. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Test Runner Configuration
 
 The system SHALL use Deno's built-in test runner for unit testing.
@@ -140,4 +143,3 @@ The Stripe connector SHALL have unit tests covering its implementation.
 - **WHEN** Stripe connector tests run
 - **THEN** sync_from filtering SHALL be tested for full sync
 - **AND** sync_from SHALL be verified to not affect incremental sync
-

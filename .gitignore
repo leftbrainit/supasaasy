@@ -8,6 +8,8 @@ node_modules/
 
 # Supabase local
 .supabase/
+**/supabase/.branches/
+**/supabase/.temp/
 
 # IDE
 .idea/
@@ -34,5 +36,14 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Legacy scaffold config (kept for reference)
 config/supasaasy.config.ts
 supabase/snippets/*
+
+# Deno
+deno.lock
+
+# Example project local files
+examples/*/supabase/migrations/*.sql
+!examples/*/supabase/migrations/.gitkeep

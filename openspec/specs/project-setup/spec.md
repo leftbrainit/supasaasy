@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 01-add-project-scaffold. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Supabase Project Structure
 
 The project SHALL be initialized as a standard Supabase project with Edge Functions support.
@@ -154,4 +156,3 @@ The project SHALL provide a generator script for scaffolding new connectors.
 - **WHEN** `deno task new-connector` is run with an invalid name
 - **THEN** an error SHALL be shown if the name is not kebab-case
 - **OR** if a connector with that name already exists
-

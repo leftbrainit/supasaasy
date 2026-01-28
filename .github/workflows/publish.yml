@@ -1,0 +1,32 @@
+name: Publish to JSR
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Type check
+        run: deno check packages/supasaasy/mod.ts
+
+      - name: Run tests
+        run: deno test --allow-env --allow-read --allow-net packages/supasaasy/
+
+      - name: Publish to JSR
+        working-directory: packages/supasaasy
+        run: deno publish

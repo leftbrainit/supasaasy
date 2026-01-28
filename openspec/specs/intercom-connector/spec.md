@@ -1,8 +1,11 @@
 # intercom-connector Specification
 
 ## Purpose
+
 TBD - created by archiving change add-intercom-connector. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Intercom Connector Registration
 
 The Intercom connector SHALL be registered with the connector registry.
@@ -218,4 +221,3 @@ The connector SHALL be configurable via app instance settings.
 - **WHEN** an Intercom app instance has `sync_from` configured
 - **THEN** full sync SHALL filter records by creation timestamp
 - **AND** only records created on or after the timestamp SHALL be synced
-

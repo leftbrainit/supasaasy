@@ -11,7 +11,7 @@
  *   deno task new-connector hubspot
  */
 
-const CONNECTORS_DIR = 'supabase/functions/_shared/connectors';
+const CONNECTORS_DIR = 'packages/supasaasy/src/connectors';
 
 // =============================================================================
 // Template Files
@@ -518,7 +518,7 @@ export async function extractEntities(
 `;
 }
 
-function getSyncIndexTemplate(name: string, pascalName: string): string {
+function getSyncIndexTemplate(_name: string, pascalName: string): string {
   return `/**
  * ${pascalName} Sync Module
  *
@@ -1092,13 +1092,22 @@ async function main() {
   const files = [
     { path: `${connectorDir}/types.ts`, content: getTypesTemplate(name, pascalName) },
     { path: `${connectorDir}/client.ts`, content: getClientTemplate(name, pascalName) },
-    { path: `${connectorDir}/normalization.ts`, content: getNormalizationTemplate(name, pascalName) },
+    {
+      path: `${connectorDir}/normalization.ts`,
+      content: getNormalizationTemplate(name, pascalName),
+    },
     { path: `${connectorDir}/webhooks.ts`, content: getWebhooksTemplate(name, pascalName) },
     { path: `${connectorDir}/sync/index.ts`, content: getSyncIndexTemplate(name, pascalName) },
     { path: `${connectorDir}/index.ts`, content: getIndexTemplate(name, pascalName) },
-    { path: `${connectorDir}/migrations/001_views.sql`, content: getMigrationTemplate(name, pascalName) },
+    {
+      path: `${connectorDir}/migrations/001_views.sql`,
+      content: getMigrationTemplate(name, pascalName),
+    },
     { path: `${connectorDir}/__tests__/mocks.ts`, content: getTestMocksTemplate(name, pascalName) },
-    { path: `${connectorDir}/__tests__/${name}.test.ts`, content: getTestTemplate(name, pascalName) },
+    {
+      path: `${connectorDir}/__tests__/${name}.test.ts`,
+      content: getTestTemplate(name, pascalName),
+    },
   ];
 
   for (const file of files) {
