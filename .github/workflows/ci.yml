@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, library-refactor]
+    branches: [main]
     paths:
       - 'packages/**'
       - 'examples/**'
