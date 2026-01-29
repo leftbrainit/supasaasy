@@ -234,18 +234,6 @@ deno task dev
 deno task functions:serve
 ```
 
-## Migration from Scaffold
-
-If you were previously using the scaffold version of SupaSaaSy:
-
-1. Install the library: Add `"supasaasy": "jsr:@supasaasy/core@^1.0.0"` to your imports
-2. Create `supasaasy.config.ts` using `defineConfig()`
-3. Update your Edge Functions to use `createWebhookHandler()` and `createSyncHandler()`
-4. Generate migrations with `getMigrations()`
-5. Remove the old `supabase/functions/_shared/` directory
-
-See `examples/starter/` for a complete example.
-
 ## License
 
 MIT
