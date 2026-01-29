@@ -4,7 +4,7 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "publish": {
-    "include": ["mod.ts", "src/**/*.ts", "LICENSE", "README.md"],
+    "include": ["mod.ts", "src/**/*.ts", "src/**/*.sql", "LICENSE", "README.md"],
     "exclude": ["**/__tests__/**", "**/*.test.ts"]
   },
   "imports": {
