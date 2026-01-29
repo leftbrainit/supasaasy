@@ -140,6 +140,46 @@ CREATE TRIGGER sync_state_update_updated_at
 -- Grant permissions
 GRANT SELECT ON supasaasy.sync_state TO authenticated;
 GRANT ALL ON supasaasy.sync_state TO service_role;
+
+-- =============================================================================
+-- Webhook Logs Table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS supasaasy.webhook_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_key TEXT,
+  request_method TEXT NOT NULL,
+  request_path TEXT NOT NULL,
+  request_headers JSONB NOT NULL DEFAULT '{}',
+  request_body JSONB,
+  response_status INTEGER NOT NULL,
+  response_body JSONB,
+  error_message TEXT,
+  processing_duration_ms INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE supasaasy.webhook_logs IS 'Logs webhook requests for debugging and auditing';
+COMMENT ON COLUMN supasaasy.webhook_logs.app_key IS 'App key the webhook was received for (nullable for invalid requests)';
+COMMENT ON COLUMN supasaasy.webhook_logs.request_method IS 'HTTP method of the webhook request';
+COMMENT ON COLUMN supasaasy.webhook_logs.request_path IS 'URL path of the webhook request';
+COMMENT ON COLUMN supasaasy.webhook_logs.request_headers IS 'Request headers (sensitive values redacted)';
+COMMENT ON COLUMN supasaasy.webhook_logs.request_body IS 'Request body payload';
+COMMENT ON COLUMN supasaasy.webhook_logs.response_status IS 'HTTP response status code';
+COMMENT ON COLUMN supasaasy.webhook_logs.response_body IS 'Response body payload';
+COMMENT ON COLUMN supasaasy.webhook_logs.error_message IS 'Error message if processing failed';
+COMMENT ON COLUMN supasaasy.webhook_logs.processing_duration_ms IS 'Processing duration in milliseconds';
+COMMENT ON COLUMN supasaasy.webhook_logs.created_at IS 'Timestamp when the log entry was created';
+
+-- Indexes for efficient querying
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_app_key ON supasaasy.webhook_logs (app_key);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_response_status ON supasaasy.webhook_logs (response_status);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_created_at ON supasaasy.webhook_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_logs_app_key_created_at ON supasaasy.webhook_logs (app_key, created_at DESC);
+
+-- Grant permissions
+GRANT SELECT ON supasaasy.webhook_logs TO authenticated;
+GRANT ALL ON supasaasy.webhook_logs TO service_role;
 `;
 
 // =============================================================================
@@ -167,7 +207,7 @@ export interface GetMigrationsOptions {
  * Generate SQL migrations for SupaSaaSy based on the configuration.
  *
  * This function generates a complete SQL migration file that includes:
- * 1. The core SupaSaaSy schema (entities table, sync_state table)
+ * 1. The core SupaSaaSy schema (entities table, sync_state table, webhook_logs table)
  * 2. Connector-specific migrations for all connectors used in the configuration
  *
  * The generated SQL uses idempotent statements (CREATE IF NOT EXISTS, CREATE OR REPLACE)

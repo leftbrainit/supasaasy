@@ -154,6 +154,23 @@ export function validateConfig(config: SupaSaaSyConfig): ConfigValidationResult 
     }
   }
 
+  // Validate webhook_logging if provided
+  if (config.webhook_logging !== undefined) {
+    if (typeof config.webhook_logging !== 'object' || config.webhook_logging === null) {
+      errors.push({
+        path: 'webhook_logging',
+        message: 'webhook_logging must be an object',
+      });
+    } else {
+      if (typeof config.webhook_logging.enabled !== 'boolean') {
+        errors.push({
+          path: 'webhook_logging.enabled',
+          message: 'enabled is required and must be a boolean',
+        });
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,

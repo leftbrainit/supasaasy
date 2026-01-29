@@ -11,7 +11,14 @@ import type {
   ParsedWebhookEvent,
   SupaSaaSyConfig,
 } from '../types/index.ts';
-import { deleteEntity, upsertEntities, upsertEntity, type UpsertEntityData } from '../db/index.ts';
+import {
+  deleteEntity,
+  insertWebhookLog,
+  upsertEntities,
+  upsertEntity,
+  type UpsertEntityData,
+  type WebhookLogData,
+} from '../db/index.ts';
 import { getAppConfig, getConnector, setConfig } from '../connectors/index.ts';
 
 // Import connectors to ensure they register themselves
@@ -63,6 +70,65 @@ function rateLimitResponse(retryAfter: number): Response {
       'Retry-After': String(retryAfter),
     },
   });
+}
+
+// =============================================================================
+// Webhook Logging
+// =============================================================================
+
+/**
+ * Helper to convert Request headers to a plain object
+ */
+function headersToObject(headers: Headers): Record<string, string> {
+  const obj: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    obj[key] = value;
+  });
+  return obj;
+}
+
+/**
+ * Log a webhook request to the database (async, non-blocking)
+ */
+function logWebhook(
+  config: SupaSaaSyConfig,
+  request: Request,
+  appKey: string | undefined,
+  responseStatus: number,
+  responseBody: Record<string, unknown>,
+  errorMessage: string | undefined,
+  startTime: number,
+  requestBody?: Record<string, unknown>,
+): void {
+  // Only log if webhook_logging is enabled
+  if (!config.webhook_logging?.enabled) {
+    return;
+  }
+
+  try {
+    const url = new URL(request.url);
+    const processingDurationMs = Date.now() - startTime;
+
+    const logData: WebhookLogData = {
+      app_key: appKey,
+      request_method: request.method,
+      request_path: url.pathname,
+      request_headers: headersToObject(request.headers),
+      request_body: requestBody,
+      response_status: responseStatus,
+      response_body: responseBody,
+      error_message: errorMessage,
+      processing_duration_ms: processingDurationMs,
+    };
+
+    // Insert log entry asynchronously (don't await to avoid blocking response)
+    insertWebhookLog(logData).catch((err) => {
+      console.error('Failed to log webhook:', err);
+    });
+  } catch (err) {
+    // Don't let logging errors affect webhook processing
+    console.error('Error in logWebhook:', err);
+  }
 }
 
 // =============================================================================
@@ -335,21 +401,57 @@ export function createWebhookHandler(
   setConfig(config);
 
   return async (req: Request): Promise<Response> => {
+    const startTime = Date.now();
+    const url = new URL(req.url);
+    let appKey: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
+
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-      return new Response(null, {
+      const response = new Response(null, {
         status: 204,
         headers: CORS_PREFLIGHT_HEADERS,
       });
+      // Log preflight requests if enabled
+      logWebhook(
+        config,
+        req,
+        undefined,
+        204,
+        {},
+        undefined,
+        startTime,
+      );
+      return response;
     }
 
     // Only accept POST requests
     if (req.method !== 'POST') {
+      const responseBody = { error: 'Method not allowed' };
+      logWebhook(
+        config,
+        req,
+        undefined,
+        405,
+        responseBody,
+        'Method not allowed',
+        startTime,
+      );
       return errorResponse('Method not allowed', 405);
     }
 
     // Check request body size before processing
     if (!checkRequestSize(req)) {
+      const responseBody = { error: 'Request body too large' };
+      logWebhook(
+        config,
+        req,
+        undefined,
+        413,
+        responseBody,
+        'Request body too large',
+        startTime,
+      );
       return errorResponse('Request body too large', 413);
     }
 
@@ -357,20 +459,48 @@ export function createWebhookHandler(
     const rateLimitKey = getRateLimitKey(req);
     const rateLimit = checkRateLimit(rateLimitKey, 100, 60000);
     if (!rateLimit.allowed) {
+      const responseBody = { error: 'Too many requests' };
+      logWebhook(
+        config,
+        req,
+        undefined,
+        429,
+        responseBody,
+        'Rate limit exceeded',
+        startTime,
+      );
       return rateLimitResponse(rateLimit.retryAfter);
     }
 
-    const url = new URL(req.url);
-
     try {
       // Extract app_key from URL path
-      const appKey = extractAppKey(url);
+      appKey = extractAppKey(url) ?? undefined;
       if (!appKey) {
+        const responseBody = { error: 'Invalid webhook URL: missing app_key' };
+        logWebhook(
+          config,
+          req,
+          undefined,
+          400,
+          responseBody,
+          'Invalid webhook URL: missing app_key',
+          startTime,
+        );
         return errorResponse('Invalid webhook URL: missing app_key', 400);
       }
 
       // Validate app_key format
       if (!isValidAppKey(appKey)) {
+        const responseBody = { error: 'Invalid app_key format' };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          400,
+          responseBody,
+          'Invalid app_key format',
+          startTime,
+        );
         return errorResponse('Invalid app_key format', 400);
       }
 
@@ -380,6 +510,16 @@ export function createWebhookHandler(
       const appConfig = getAppConfig(appKey, config);
       if (!appConfig) {
         console.error(`No configuration found for app_key: ${appKey}`);
+        const responseBody = { error: 'Unknown app_key' };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          404,
+          responseBody,
+          'Unknown app_key',
+          startTime,
+        );
         return errorResponse('Unknown app_key', 404);
       }
 
@@ -387,6 +527,16 @@ export function createWebhookHandler(
       const connector = await getConnector(appConfig.connector);
       if (!connector) {
         console.error(`No connector found for provider: ${appConfig.connector}`);
+        const responseBody = { error: 'Connector not available' };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          500,
+          responseBody,
+          'Connector not available',
+          startTime,
+        );
         return errorResponse('Connector not available', 500);
       }
 
@@ -395,10 +545,25 @@ export function createWebhookHandler(
       const verificationResult = await connector.verifyWebhook(req, appConfig);
       if (!verificationResult.valid) {
         console.error(`Webhook verification failed: ${verificationResult.reason}`);
+        const responseBody = { error: verificationResult.reason || 'Webhook verification failed' };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          401,
+          responseBody,
+          verificationResult.reason || 'Webhook verification failed',
+          startTime,
+        );
         return errorResponse(
           verificationResult.reason || 'Webhook verification failed',
           401,
         );
+      }
+
+      // Store request body for logging (after verification)
+      if (typeof verificationResult.payload === 'object' && verificationResult.payload !== null) {
+        requestBody = verificationResult.payload as Record<string, unknown>;
       }
 
       // Parse the webhook event
@@ -425,11 +590,40 @@ export function createWebhookHandler(
         if (result.error) {
           // Log detailed error server-side only; return generic message to client
           console.error(`Error processing webhook: ${result.error.message}`);
+          const responseBody = { error: 'Internal server error' };
+          logWebhook(
+            config,
+            req,
+            appKey,
+            500,
+            responseBody,
+            result.error.message,
+            startTime,
+            requestBody,
+          );
           return errorResponse('Internal server error', 500);
         }
 
         console.log(
           `Webhook processed successfully: ${result.action} ${result.count} entity(ies) for ${event.resourceType}:${event.externalId}`,
+        );
+
+        const responseBody = {
+          success: true,
+          action: result.action,
+          resourceType: event.resourceType,
+          externalId: event.externalId,
+          entityCount: result.count,
+        };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          200,
+          responseBody,
+          undefined,
+          startTime,
+          requestBody,
         );
 
         return successResponse({
@@ -449,11 +643,39 @@ export function createWebhookHandler(
       if (result.error) {
         // Log detailed error server-side only; return generic message to client
         console.error(`Error processing webhook: ${result.error.message}`);
+        const responseBody = { error: 'Internal server error' };
+        logWebhook(
+          config,
+          req,
+          appKey,
+          500,
+          responseBody,
+          result.error.message,
+          startTime,
+          requestBody,
+        );
         return errorResponse('Internal server error', 500);
       }
 
       console.log(
         `Webhook processed successfully: ${result.action} for ${event.resourceType}:${event.externalId}`,
+      );
+
+      const responseBody = {
+        success: true,
+        action: result.action,
+        resourceType: event.resourceType,
+        externalId: event.externalId,
+      };
+      logWebhook(
+        config,
+        req,
+        appKey,
+        200,
+        responseBody,
+        undefined,
+        startTime,
+        requestBody,
       );
 
       return successResponse({
@@ -464,6 +686,17 @@ export function createWebhookHandler(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Unexpected error processing webhook: ${errorMessage}`);
+      const responseBody = { error: 'Internal server error' };
+      logWebhook(
+        config,
+        req,
+        appKey,
+        500,
+        responseBody,
+        errorMessage,
+        startTime,
+        requestBody,
+      );
       return errorResponse('Internal server error', 500);
     }
   };

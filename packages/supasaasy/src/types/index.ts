@@ -57,6 +57,14 @@ export interface SyncSchedule {
 }
 
 /**
+ * Configuration for webhook logging behavior
+ */
+export interface WebhookLoggingConfig {
+  /** Whether to log webhook requests to the database */
+  enabled: boolean;
+}
+
+/**
  * Root configuration for SupaSaaSy
  */
 export interface SupaSaaSyConfig {
@@ -64,6 +72,8 @@ export interface SupaSaaSyConfig {
   apps: AppConfig[];
   /** Periodic sync schedules */
   sync_schedules?: SyncSchedule[];
+  /** Webhook logging configuration */
+  webhook_logging?: WebhookLoggingConfig;
 }
 
 // =============================================================================
@@ -289,4 +299,36 @@ export interface SyncRecord {
   raw_data?: unknown;
   /** Timestamp of the external event */
   external_updated_at?: string;
+}
+
+// =============================================================================
+// Webhook Logging Types
+// =============================================================================
+
+/**
+ * Webhook log entry as stored in the database
+ */
+export interface WebhookLogEntry {
+  /** Unique identifier for this log entry */
+  id?: string;
+  /** App key this webhook was received for */
+  app_key?: string;
+  /** HTTP method of the webhook request */
+  request_method: string;
+  /** URL path of the webhook request */
+  request_path: string;
+  /** Request headers (sanitized) */
+  request_headers: Record<string, string>;
+  /** Request body payload */
+  request_body?: Record<string, unknown>;
+  /** HTTP response status code */
+  response_status: number;
+  /** Response body payload */
+  response_body?: Record<string, unknown>;
+  /** Error message if processing failed */
+  error_message?: string;
+  /** Processing duration in milliseconds */
+  processing_duration_ms?: number;
+  /** Timestamp when the log entry was created */
+  created_at?: string;
 }
