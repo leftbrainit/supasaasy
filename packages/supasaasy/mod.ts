@@ -30,7 +30,7 @@
  * ```typescript
  * // supabase/functions/webhook/index.ts
  * import { createWebhookHandler } from '@supasaasy/core';
- * import config from '@config';
+ * import config from '../../../supasaasy.config.ts';
  *
  * Deno.serve(createWebhookHandler(config));
  * ```
@@ -38,7 +38,7 @@
  * ```typescript
  * // supabase/functions/sync/index.ts
  * import { createSyncHandler } from '@supasaasy/core';
- * import config from '@config';
+ * import config from '../../../supasaasy.config.ts';
  *
  * Deno.serve(createSyncHandler(config));
  * ```

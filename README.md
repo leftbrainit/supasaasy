@@ -190,6 +190,7 @@ your-project/
 ├── supabase/
 │   ├── config.toml
 │   ├── functions/
+│   │   ├── deno.json             # Import map for functions
 │   │   ├── webhook/index.ts      # Thin wrapper
 │   │   └── sync/index.ts         # Thin wrapper
 │   └── migrations/
