@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change 04-add-webhook-infrastructure. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Webhook Endpoint
 
 The system SHALL expose a webhook endpoint for receiving SaaS provider events.
@@ -21,6 +19,19 @@ The system SHALL expose a webhook endpoint for receiving SaaS provider events.
 - **WHEN** a webhook is received for an unconfigured `app_key`
 - **THEN** the system SHALL return 404 Not Found
 - **AND** no processing SHALL occur
+
+#### Scenario: App key format validated
+
+- **WHEN** a webhook is received with an app_key in the URL
+- **THEN** the app_key SHALL be validated for format
+- **AND** only alphanumeric characters, underscores, and hyphens SHALL be allowed
+- **AND** invalid app_key formats SHALL return 400 Bad Request
+
+#### Scenario: Request body size limited
+
+- **WHEN** a webhook request is received
+- **THEN** the request body size SHALL be validated
+- **AND** requests exceeding 1MB SHALL be rejected with 413 Payload Too Large
 
 ### Requirement: Webhook Verification
 
@@ -126,3 +137,40 @@ The system SHALL implement security best practices for webhook handling.
 - **WHEN** multiple instances of a provider are configured
 - **THEN** each instance MAY have its own webhook secret
 - **AND** the correct secret SHALL be used based on `app_key`
+
+#### Scenario: Error messages sanitized
+
+- **WHEN** returning error responses to clients
+- **THEN** internal error details SHALL NOT be exposed
+- **AND** generic error messages SHALL be used for 500 errors
+- **AND** detailed errors SHALL only be logged server-side
+
+#### Scenario: CORS restricted
+
+- **WHEN** the webhook endpoint responds to requests
+- **THEN** CORS headers SHALL NOT use wildcard origins
+- **AND** CORS SHALL only be enabled for preflight OPTIONS requests
+- **AND** non-browser clients (SaaS webhooks) SHALL not require CORS
+
+### Requirement: Rate Limiting
+
+The system SHALL implement rate limiting to protect against abuse.
+
+#### Scenario: Webhook rate limit enforced
+
+- **WHEN** webhook requests exceed the configured rate limit
+- **THEN** the system SHALL return 429 Too Many Requests
+- **AND** the response SHALL include a Retry-After header
+
+#### Scenario: Webhook rate limit configurable
+
+- **WHEN** the webhook handler is initialized
+- **THEN** the rate limit SHALL be configurable
+- **AND** the default SHALL be 100 requests per minute
+
+#### Scenario: Rate limit by IP or app_key
+
+- **WHEN** rate limiting is applied
+- **THEN** limits SHALL be tracked per source IP or per app_key
+- **AND** legitimate requests from different sources SHALL not be affected by others
+

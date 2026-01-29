@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change 02-add-core-schema. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Canonical Entities Table
 
 The system SHALL store all SaaS data in a single canonical `supasaasy.entities` table.
@@ -107,3 +105,11 @@ The system SHALL provide shared database utilities for Edge Functions.
 
 - **WHEN** a connector needs to delete an entity
 - **THEN** a shared delete function SHALL handle physical deletion
+
+#### Scenario: Parameterized queries only
+
+- **WHEN** database operations are performed
+- **THEN** all queries SHALL use parameterized queries via Supabase's query builder
+- **AND** raw SQL string execution SHALL NOT be available
+- **AND** this SHALL prevent SQL injection vulnerabilities
+

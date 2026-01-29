@@ -102,10 +102,7 @@ export async function verifyWebhook(
 
     // Compare signatures using constant-time comparison
     if (!constantTimeEqual(signature, expectedSignature)) {
-      logger.warn('webhook', 'Signature mismatch', {
-        received: signature.substring(0, 16) + '...',
-        expected: expectedSignature.substring(0, 16) + '...',
-      });
+      logger.warn('webhook', 'Webhook signature verification failed');
       return {
         valid: false,
         reason: 'Invalid webhook signature',

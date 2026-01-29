@@ -27,6 +27,22 @@ import {
 // =============================================================================
 
 /**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns true if both strings are equal, using XOR comparison
+ * that takes the same time regardless of where strings differ.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+/**
  * Compute HMAC SHA-1 signature for Intercom webhook verification
  */
 async function computeHmacSha1(secret: string, body: string): Promise<string> {
@@ -73,12 +89,9 @@ export async function verifyWebhook(
     // Compute expected signature
     const expectedSignature = await computeHmacSha1(webhookSecret, body);
 
-    // Compare signatures (constant-time comparison would be better, but this is sufficient)
-    if (signature !== expectedSignature) {
-      logger.warn('webhook', 'Signature mismatch', {
-        received: signature.substring(0, 20) + '...',
-        expected: expectedSignature.substring(0, 20) + '...',
-      });
+    // Use constant-time comparison to prevent timing attacks
+    if (!constantTimeEqual(signature, expectedSignature)) {
+      logger.warn('webhook', 'Webhook signature verification failed');
       return {
         valid: false,
         reason: 'Invalid webhook signature',

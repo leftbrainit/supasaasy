@@ -23,10 +23,17 @@ import '../connectors/notion/index.ts';
 // Response Helpers
 // =============================================================================
 
-const CORS_HEADERS = {
+// CORS headers for preflight responses only
+// Webhooks are server-to-server and don't require browser CORS
+const CORS_PREFLIGHT_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Webhook-Signature',
+};
+
+// Minimal headers for regular responses (no CORS for server-to-server)
+const RESPONSE_HEADERS = {
+  'Content-Type': 'application/json',
 };
 
 function jsonResponse(
@@ -35,10 +42,7 @@ function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...CORS_HEADERS,
-    },
+    headers: RESPONSE_HEADERS,
   });
 }
 
@@ -49,6 +53,99 @@ function errorResponse(message: string, status: number): Response {
 
 function successResponse(data?: Record<string, unknown>): Response {
   return jsonResponse({ success: true, ...data }, 200);
+}
+
+function rateLimitResponse(retryAfter: number): Response {
+  return new Response(JSON.stringify({ error: 'Too many requests' }), {
+    status: 429,
+    headers: {
+      ...RESPONSE_HEADERS,
+      'Retry-After': String(retryAfter),
+    },
+  });
+}
+
+// =============================================================================
+// Rate Limiting
+// =============================================================================
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/**
+ * Simple in-memory rate limiter.
+ * For production, consider using a distributed store like Redis.
+ */
+function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): { allowed: boolean; retryAfter: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  // Clean up expired entries periodically
+  if (Math.random() < 0.01) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (now > v.resetTime) {
+        rateLimitStore.delete(k);
+      }
+    }
+  }
+
+  if (!entry || now > entry.resetTime) {
+    // New window
+    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  if (entry.count >= maxRequests) {
+    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  entry.count++;
+  return { allowed: true, retryAfter: 0 };
+}
+
+/**
+ * Get client identifier for rate limiting.
+ * Uses X-Forwarded-For header or falls back to a default key.
+ */
+function getRateLimitKey(request: Request, appKey?: string): string {
+  const forwardedFor = request.headers.get('X-Forwarded-For');
+  const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
+  return appKey ? `webhook:${appKey}:${ip}` : `webhook:${ip}`;
+}
+
+// =============================================================================
+// Input Validation
+// =============================================================================
+
+/**
+ * Validate app_key format.
+ * Only allows alphanumeric characters, underscores, and hyphens.
+ */
+function isValidAppKey(appKey: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(appKey) && appKey.length > 0 && appKey.length <= 64;
+}
+
+/** Maximum allowed request body size (1MB) */
+const MAX_REQUEST_SIZE = 1024 * 1024;
+
+/**
+ * Check if request body size is within limits.
+ */
+function checkRequestSize(request: Request): boolean {
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_SIZE) {
+    return false;
+  }
+  return true;
 }
 
 // =============================================================================
@@ -242,13 +339,25 @@ export function createWebhookHandler(
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: CORS_HEADERS,
+        headers: CORS_PREFLIGHT_HEADERS,
       });
     }
 
     // Only accept POST requests
     if (req.method !== 'POST') {
       return errorResponse('Method not allowed', 405);
+    }
+
+    // Check request body size before processing
+    if (!checkRequestSize(req)) {
+      return errorResponse('Request body too large', 413);
+    }
+
+    // Rate limiting: 100 requests per minute per IP
+    const rateLimitKey = getRateLimitKey(req);
+    const rateLimit = checkRateLimit(rateLimitKey, 100, 60000);
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.retryAfter);
     }
 
     const url = new URL(req.url);
@@ -258,6 +367,11 @@ export function createWebhookHandler(
       const appKey = extractAppKey(url);
       if (!appKey) {
         return errorResponse('Invalid webhook URL: missing app_key', 400);
+      }
+
+      // Validate app_key format
+      if (!isValidAppKey(appKey)) {
+        return errorResponse('Invalid app_key format', 400);
       }
 
       console.log(`Processing webhook for app_key: ${appKey}`);
@@ -309,8 +423,9 @@ export function createWebhookHandler(
         const result = await processWebhookEntities(event, entities, appConfig, config);
 
         if (result.error) {
+          // Log detailed error server-side only; return generic message to client
           console.error(`Error processing webhook: ${result.error.message}`);
-          return errorResponse(`Processing error: ${result.error.message}`, 500);
+          return errorResponse('Internal server error', 500);
         }
 
         console.log(
@@ -332,8 +447,9 @@ export function createWebhookHandler(
       const result = await processWebhookEvent(event, entity, appConfig, config);
 
       if (result.error) {
+        // Log detailed error server-side only; return generic message to client
         console.error(`Error processing webhook: ${result.error.message}`);
-        return errorResponse(`Processing error: ${result.error.message}`, 500);
+        return errorResponse('Internal server error', 500);
       }
 
       console.log(

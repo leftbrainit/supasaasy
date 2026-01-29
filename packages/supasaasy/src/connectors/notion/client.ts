@@ -31,6 +31,25 @@ export const NOTION_API_BASE = 'https://api.notion.com';
 
 export const logger = createConnectorLogger(CONNECTOR_NAME);
 
+// =============================================================================
+// Environment Detection
+// =============================================================================
+
+/**
+ * Detect if running in a production environment.
+ * Returns true if running on Deno Deploy or if DENO_ENV/NODE_ENV is set to 'production'.
+ */
+function isProductionEnvironment(): boolean {
+  // Deno Deploy sets this environment variable
+  if (Deno.env.get('DENO_DEPLOYMENT_ID')) {
+    return true;
+  }
+  // Check explicit environment settings
+  const denoEnv = Deno.env.get('DENO_ENV');
+  const nodeEnv = Deno.env.get('NODE_ENV');
+  return denoEnv === 'production' || nodeEnv === 'production';
+}
+
 /** Valid Notion resource types */
 const VALID_RESOURCE_TYPES: NotionResourceType[] = [
   'data_source',
@@ -51,45 +70,77 @@ export function getNotionConfig(appConfig: AppConfig): NotionAppConfig {
 }
 
 /**
- * Get the Notion API key (Internal Integration Token) from environment or config
+ * Get the Notion API key (Internal Integration Token) from environment or config.
+ * Environment variables take precedence over direct secrets.
+ * Direct secrets are rejected in production environments.
  */
 export function getApiKey(appConfig: AppConfig): string {
   const config = getNotionConfig(appConfig);
 
+  // Try environment variable first (always preferred)
   if (config.api_key_env) {
     const apiKey = Deno.env.get(config.api_key_env);
     if (apiKey) return apiKey;
   }
 
-  if (config.api_key) {
-    return config.api_key;
-  }
-
+  // Try default environment variable pattern
   const defaultEnvKey = `NOTION_API_KEY_${appConfig.app_key.toUpperCase()}`;
   const defaultApiKey = Deno.env.get(defaultEnvKey);
   if (defaultApiKey) return defaultApiKey;
+
+  // Fall back to direct config (not allowed in production)
+  if (config.api_key) {
+    if (isProductionEnvironment()) {
+      throw new Error(
+        `Direct API keys are not allowed in production. ` +
+          `Use environment variable ${config.api_key_env || defaultEnvKey} instead.`,
+      );
+    }
+    logger.warn(
+      'config',
+      `Using direct api_key for ${appConfig.app_key}. ` +
+        `This is not recommended. Use api_key_env with environment variables instead.`,
+    );
+    return config.api_key;
+  }
 
   throw new Error(`No Notion API key found for app ${appConfig.app_key}`);
 }
 
 /**
- * Get the webhook signing secret from environment or config
+ * Get the webhook signing secret from environment or config.
+ * Environment variables take precedence over direct secrets.
+ * Direct secrets are rejected in production environments.
  */
 export function getWebhookSecret(appConfig: AppConfig): string {
   const config = getNotionConfig(appConfig);
 
+  // Try environment variable first (always preferred)
   if (config.webhook_secret_env) {
     const secret = Deno.env.get(config.webhook_secret_env);
     if (secret) return secret;
   }
 
-  if (config.webhook_secret) {
-    return config.webhook_secret;
-  }
-
+  // Try default environment variable pattern
   const defaultEnvKey = `NOTION_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`;
   const defaultSecret = Deno.env.get(defaultEnvKey);
   if (defaultSecret) return defaultSecret;
+
+  // Fall back to direct config (not allowed in production)
+  if (config.webhook_secret) {
+    if (isProductionEnvironment()) {
+      throw new Error(
+        `Direct webhook secrets are not allowed in production. ` +
+          `Use environment variable ${config.webhook_secret_env || defaultEnvKey} instead.`,
+      );
+    }
+    logger.warn(
+      'config',
+      `Using direct webhook_secret for ${appConfig.app_key}. ` +
+        `This is not recommended. Use webhook_secret_env with environment variables instead.`,
+    );
+    return config.webhook_secret;
+  }
 
   throw new Error(`No Notion webhook secret found for app ${appConfig.app_key}`);
 }
@@ -305,6 +356,7 @@ export function createNotionClient(appConfig: AppConfig): NotionClient {
 export function validateNotionConfig(appConfig: AppConfig): ConfigValidationResult {
   const errors: ConfigValidationError[] = [];
   const config = getNotionConfig(appConfig);
+  const isProd = isProductionEnvironment();
 
   // Validate API key configuration
   const hasApiKeyEnv = config.api_key_env && Deno.env.get(config.api_key_env);
@@ -321,6 +373,24 @@ export function validateNotionConfig(appConfig: AppConfig): ConfigValidationResu
     });
   }
 
+  // Warn about direct secrets usage (error in production)
+  if (hasApiKey && !hasApiKeyEnv && !hasDefaultApiKey) {
+    if (isProd) {
+      errors.push({
+        field: 'api_key',
+        message: 'Direct API keys are not allowed in production',
+        suggestion: `Use api_key_env with environment variable ${
+          config.api_key_env || `NOTION_API_KEY_${appConfig.app_key.toUpperCase()}`
+        }`,
+      });
+    } else {
+      logger.warn(
+        'config',
+        `Direct api_key configured for ${appConfig.app_key}. Use environment variables for production.`,
+      );
+    }
+  }
+
   // Validate webhook secret (only warn, as it's only required for webhook handling)
   const hasWebhookSecretEnv = config.webhook_secret_env && Deno.env.get(config.webhook_secret_env);
   const hasWebhookSecret = !!config.webhook_secret;
@@ -333,6 +403,24 @@ export function validateNotionConfig(appConfig: AppConfig): ConfigValidationResu
       'config',
       `No webhook secret configured for ${appConfig.app_key}. Webhook verification will fail.`,
     );
+  }
+
+  // Warn about direct webhook secret usage (error in production)
+  if (hasWebhookSecret && !hasWebhookSecretEnv && !hasDefaultWebhookSecret) {
+    if (isProd) {
+      errors.push({
+        field: 'webhook_secret',
+        message: 'Direct webhook secrets are not allowed in production',
+        suggestion: `Use webhook_secret_env with environment variable ${
+          config.webhook_secret_env || `NOTION_WEBHOOK_SECRET_${appConfig.app_key.toUpperCase()}`
+        }`,
+      });
+    } else {
+      logger.warn(
+        'config',
+        `Direct webhook_secret configured for ${appConfig.app_key}. Use environment variables for production.`,
+      );
+    }
   }
 
   // Validate sync_resources if provided

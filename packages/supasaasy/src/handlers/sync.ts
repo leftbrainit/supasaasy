@@ -59,10 +59,17 @@ interface SyncResponse {
 // Response Helpers
 // =============================================================================
 
-const CORS_HEADERS = {
+// CORS headers for preflight responses only
+// Sync is server-to-server and doesn't require browser CORS
+const CORS_PREFLIGHT_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Minimal headers for regular responses (no CORS for server-to-server)
+const RESPONSE_HEADERS = {
+  'Content-Type': 'application/json',
 };
 
 function jsonResponse(
@@ -71,10 +78,7 @@ function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      'Content-Type': 'application/json',
-      ...CORS_HEADERS,
-    },
+    headers: RESPONSE_HEADERS,
   });
 }
 
@@ -87,6 +91,111 @@ function successResponse(data: SyncResponse): Response {
   return jsonResponse(data as unknown as Record<string, unknown>, 200);
 }
 
+function rateLimitResponse(retryAfter: number): Response {
+  return new Response(JSON.stringify({ error: 'Too many requests', success: false }), {
+    status: 429,
+    headers: {
+      ...RESPONSE_HEADERS,
+      'Retry-After': String(retryAfter),
+    },
+  });
+}
+
+// =============================================================================
+// Rate Limiting
+// =============================================================================
+
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/**
+ * Simple in-memory rate limiter.
+ * For production, consider using a distributed store like Redis.
+ */
+function checkRateLimit(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): { allowed: boolean; retryAfter: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  // Clean up expired entries periodically
+  if (Math.random() < 0.01) {
+    for (const [k, v] of rateLimitStore.entries()) {
+      if (now > v.resetTime) {
+        rateLimitStore.delete(k);
+      }
+    }
+  }
+
+  if (!entry || now > entry.resetTime) {
+    // New window
+    rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
+    return { allowed: true, retryAfter: 0 };
+  }
+
+  if (entry.count >= maxRequests) {
+    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
+    return { allowed: false, retryAfter };
+  }
+
+  entry.count++;
+  return { allowed: true, retryAfter: 0 };
+}
+
+/**
+ * Get rate limit key from API key (first 8 chars for privacy).
+ */
+function getRateLimitKey(request: Request): string {
+  const authHeader = request.headers.get('Authorization');
+  if (authHeader) {
+    const [, token] = authHeader.split(' ');
+    if (token) {
+      // Use first 8 chars of token as key for privacy
+      return `sync:${token.substring(0, 8)}`;
+    }
+  }
+  // Fall back to IP-based limiting
+  const forwardedFor = request.headers.get('X-Forwarded-For');
+  const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
+  return `sync:${ip}`;
+}
+
+// =============================================================================
+// Security Helpers
+// =============================================================================
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns true if both strings are equal.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+/**
+ * Validate app_key format.
+ * Only allows alphanumeric characters, underscores, and hyphens.
+ */
+function isValidAppKey(appKey: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(appKey) && appKey.length > 0 && appKey.length <= 64;
+}
+
+/** Maximum allowed request body size (1MB) */
+const MAX_REQUEST_SIZE = 1024 * 1024;
+
 // =============================================================================
 // Authentication
 // =============================================================================
@@ -94,6 +203,7 @@ function successResponse(data: SyncResponse): Response {
 /**
  * Verify the admin API key from the Authorization header.
  * Expected format: "Bearer <admin_api_key>"
+ * Uses constant-time comparison to prevent timing attacks.
  */
 function verifyAdminApiKey(request: Request): boolean {
   const authHeader = request.headers.get('Authorization');
@@ -112,7 +222,8 @@ function verifyAdminApiKey(request: Request): boolean {
     return false;
   }
 
-  return token === adminApiKey;
+  // Use constant-time comparison to prevent timing attacks
+  return constantTimeEqual(token, adminApiKey);
 }
 
 // =============================================================================
@@ -316,13 +427,20 @@ export function createSyncHandler(
     if (req.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: CORS_HEADERS,
+        headers: CORS_PREFLIGHT_HEADERS,
       });
     }
 
     // Only accept POST requests
     if (req.method !== 'POST') {
       return errorResponse('Method not allowed', 405);
+    }
+
+    // Rate limiting: 10 requests per minute per API key
+    const rateLimitKey = getRateLimitKey(req);
+    const rateLimit = checkRateLimit(rateLimitKey, 10, 60000);
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.retryAfter);
     }
 
     const startTime = Date.now();
@@ -334,9 +452,19 @@ export function createSyncHandler(
       }
 
       // Parse request body
+      // Check request body size
+      const contentLength = req.headers.get('Content-Length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_SIZE) {
+        return errorResponse('Request body too large', 413);
+      }
+
       let requestBody: SyncRequest;
       try {
-        requestBody = await req.json();
+        const bodyText = await req.text();
+        if (bodyText.length > MAX_REQUEST_SIZE) {
+          return errorResponse('Request body too large', 413);
+        }
+        requestBody = JSON.parse(bodyText);
       } catch {
         return errorResponse('Invalid JSON body', 400);
       }
@@ -344,6 +472,11 @@ export function createSyncHandler(
       // Validate required fields
       if (!requestBody.app_key) {
         return errorResponse('Missing required field: app_key', 400);
+      }
+
+      // Validate app_key format
+      if (!isValidAppKey(requestBody.app_key)) {
+        return errorResponse('Invalid app_key format', 400);
       }
 
       const appKey = requestBody.app_key;
@@ -371,9 +504,10 @@ export function createSyncHandler(
         duration_ms: duration,
       });
     } catch (error) {
+      // Log detailed error server-side only; return generic message to client
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Unexpected error during sync: ${errorMessage}`);
-      return errorResponse(`Internal server error: ${errorMessage}`, 500);
+      return errorResponse('Internal server error', 500);
     }
   };
 }
