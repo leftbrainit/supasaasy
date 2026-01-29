@@ -127,15 +127,15 @@ supabase db push --local
 
 ```typescript
 interface AppConfig {
-  app_key: string;      // Unique identifier (used in webhook URLs)
-  name: string;         // Human-readable name
-  connector: string;    // Connector type ('stripe' | 'intercom' | 'notion')
+  app_key: string; // Unique identifier (used in webhook URLs)
+  name: string; // Human-readable name
+  connector: string; // Connector type ('stripe' | 'intercom' | 'notion')
   config: {
-    api_key_env?: string;        // Environment variable for API key
+    api_key_env?: string; // Environment variable for API key
     webhook_secret_env?: string; // Environment variable for webhook secret
-    sync_resources?: string[];   // Optional: specific resources to sync
+    sync_resources?: string[]; // Optional: specific resources to sync
   };
-  sync_from?: string | Date;     // Optional: minimum date for historical sync
+  sync_from?: string | Date; // Optional: minimum date for historical sync
 }
 ```
 

@@ -198,11 +198,17 @@ export interface NotionClient {
   /** Make a POST request to the Notion API */
   post<T>(path: string, body: unknown): Promise<T>;
   /** Search for data sources via the search API */
-  searchDataSources(cursor?: string, pageSize?: number): Promise<NotionPaginatedResponse<NotionDataSource>>;
+  searchDataSources(
+    cursor?: string,
+    pageSize?: number,
+  ): Promise<NotionPaginatedResponse<NotionDataSource>>;
   /** Get a single data source by ID */
   getDataSource(dataSourceId: string): Promise<NotionDataSource>;
   /** Query pages from a data source */
-  queryDataSource(dataSourceId: string, body?: NotionDataSourceQueryRequest): Promise<NotionPaginatedResponse<NotionPage>>;
+  queryDataSource(
+    dataSourceId: string,
+    body?: NotionDataSourceQueryRequest,
+  ): Promise<NotionPaginatedResponse<NotionPage>>;
   /** Get a single page by ID */
   getPage(pageId: string): Promise<NotionPage>;
   /** List all users */
@@ -258,7 +264,9 @@ export function createNotionClient(appConfig: AppConfig): NotionClient {
     // Handle rate limiting with exponential backoff
     if (response.status === 429 && retries > 0) {
       const retryAfter = response.headers.get('Retry-After');
-      const waitTime = retryAfter ? parseInt(retryAfter, 10) * 1000 : Math.pow(2, 4 - retries) * 1000;
+      const waitTime = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : Math.pow(2, 4 - retries) * 1000;
       logger.warn('api', `Rate limited, waiting ${waitTime}ms before retry`, { retries });
       await new Promise((resolve) => setTimeout(resolve, waitTime));
       return request<T>(method, path, params, body, retries - 1);
@@ -306,7 +314,12 @@ export function createNotionClient(appConfig: AppConfig): NotionClient {
       if (cursor) {
         body.start_cursor = cursor;
       }
-      return request<NotionPaginatedResponse<NotionDataSource>>('POST', '/v1/search', undefined, body);
+      return request<NotionPaginatedResponse<NotionDataSource>>(
+        'POST',
+        '/v1/search',
+        undefined,
+        body,
+      );
     },
 
     getDataSource(dataSourceId: string) {

@@ -50,7 +50,6 @@ export const NOTION_WEBHOOK_EVENTS = {
   'page.content_updated': { resourceType: 'page', eventType: 'update' },
   'page.deleted': { resourceType: 'page', eventType: 'delete' },
   'page.undeleted': { resourceType: 'page', eventType: 'undelete' },
-
   // Note: Users don't have webhook support
 } as const;
 
@@ -193,13 +192,27 @@ export interface NotionProperty {
   email?: Record<string, never>;
   phone_number?: Record<string, never>;
   formula?: { expression: string };
-  relation?: { database_id: string; type: string; single_property?: Record<string, never>; dual_property?: { synced_property_name: string; synced_property_id: string } };
-  rollup?: { relation_property_name: string; relation_property_id: string; rollup_property_name: string; rollup_property_id: string; function: string };
+  relation?: {
+    database_id: string;
+    type: string;
+    single_property?: Record<string, never>;
+    dual_property?: { synced_property_name: string; synced_property_id: string };
+  };
+  rollup?: {
+    relation_property_name: string;
+    relation_property_id: string;
+    rollup_property_name: string;
+    rollup_property_id: string;
+    function: string;
+  };
   created_time?: Record<string, never>;
   created_by?: Record<string, never>;
   last_edited_time?: Record<string, never>;
   last_edited_by?: Record<string, never>;
-  status?: { options: Array<{ id: string; name: string; color: string }>; groups: Array<{ id: string; name: string; color: string; option_ids: string[] }> };
+  status?: {
+    options: Array<{ id: string; name: string; color: string }>;
+    groups: Array<{ id: string; name: string; color: string; option_ids: string[] }>;
+  };
   unique_id?: { prefix: string | null };
   verification?: Record<string, never>;
   button?: Record<string, never>;
@@ -249,21 +262,43 @@ export interface NotionPropertyValue {
   multi_select?: Array<{ id: string; name: string; color: string }>;
   date?: { start: string; end?: string | null; time_zone?: string | null } | null;
   people?: Array<NotionUserReference>;
-  files?: Array<{ name: string; type: string; external?: { url: string }; file?: { url: string; expiry_time: string } }>;
+  files?: Array<
+    {
+      name: string;
+      type: string;
+      external?: { url: string };
+      file?: { url: string; expiry_time: string };
+    }
+  >;
   checkbox?: boolean;
   url?: string | null;
   email?: string | null;
   phone_number?: string | null;
-  formula?: { type: string; string?: string; number?: number; boolean?: boolean; date?: { start: string; end?: string | null } };
+  formula?: {
+    type: string;
+    string?: string;
+    number?: number;
+    boolean?: boolean;
+    date?: { start: string; end?: string | null };
+  };
   relation?: Array<{ id: string }>;
-  rollup?: { type: string; array?: unknown[]; number?: number; date?: { start: string; end?: string | null } };
+  rollup?: {
+    type: string;
+    array?: unknown[];
+    number?: number;
+    date?: { start: string; end?: string | null };
+  };
   created_time?: string;
   created_by?: NotionUserReference;
   last_edited_time?: string;
   last_edited_by?: NotionUserReference;
   status?: { id: string; name: string; color: string } | null;
   unique_id?: { prefix: string | null; number: number };
-  verification?: { state: string; verified_by?: NotionUserReference; date?: { start: string; end?: string | null } } | null;
+  verification?: {
+    state: string;
+    verified_by?: NotionUserReference;
+    date?: { start: string; end?: string | null };
+  } | null;
 }
 
 /**

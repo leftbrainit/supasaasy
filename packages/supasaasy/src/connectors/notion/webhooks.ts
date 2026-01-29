@@ -168,23 +168,21 @@ export async function parseWebhookEvent(
     data = (event.data?.deleted_object as unknown as Record<string, unknown>) ?? {};
   } else {
     const eventData = event.data as Record<string, unknown>;
-    
+
     // For non-delete events, extract the resource ID
     // Notion 2025-09-03 API puts the entity reference at the top level as `entity: { id, type }`
     // Also check legacy fields for backward compatibility
     externalId = event.entity?.id ??
-                 event.page_id ?? 
-                 event.data_source_id ?? 
-                 event.user_id ??
-                 '';
-    
+      event.page_id ??
+      event.data_source_id ??
+      event.user_id ??
+      '';
+
     // For data, try to get the full object if present (create events),
     // otherwise use the partial data (update events)
     const fullObj = eventData?.page ?? eventData?.data_source ?? eventData?.object;
-    data = fullObj
-      ? (fullObj as unknown as Record<string, unknown>)
-      : (eventData ?? {});
-    
+    data = fullObj ? (fullObj as unknown as Record<string, unknown>) : (eventData ?? {});
+
     // Log if we couldn't find the ID for debugging
     if (!externalId) {
       logger.warn('webhook', 'Could not extract ID from webhook payload', {

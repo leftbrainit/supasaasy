@@ -207,8 +207,5 @@ export {
 export type { IntercomAppConfig, IntercomResourceType } from './src/connectors/intercom/types.ts';
 
 // Notion Connector
-export {
-  metadata as notionMetadata,
-  notionConnector,
-} from './src/connectors/notion/index.ts';
+export { metadata as notionMetadata, notionConnector } from './src/connectors/notion/index.ts';
 export type { NotionAppConfig, NotionResourceType } from './src/connectors/notion/types.ts';

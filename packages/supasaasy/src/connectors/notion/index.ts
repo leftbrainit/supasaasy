@@ -138,7 +138,7 @@ registerConnector(CONNECTOR_NAME, () => notionConnector);
 
 // Export for direct use
 export default notionConnector;
-export { notionConnector, metadata };
+export { metadata, notionConnector };
 
 // Re-export modules for direct access if needed
 export * from './client.ts';

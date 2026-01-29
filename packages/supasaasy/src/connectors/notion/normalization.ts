@@ -89,10 +89,10 @@ export function extractPageTitle(page: NotionPage): string {
 
 /**
  * Create a NormalizedEntity with Notion UUID as both the id and external_id.
- * 
+ *
  * Per the spec, Notion UUIDs are used directly as the entity `id` column,
  * enabling natural foreign key relationships between Notion resources.
- * 
+ *
  * Used for data_source, page, and user resources.
  */
 function createEntityWithNotionId(params: {
@@ -143,7 +143,10 @@ export function normalizeDataSource(
   dataSource: NotionDataSource,
   appConfig: AppConfig,
 ): NormalizedEntity {
-  const archivedAt = detectArchivedAt('data_source', dataSource as unknown as Record<string, unknown>);
+  const archivedAt = detectArchivedAt(
+    'data_source',
+    dataSource as unknown as Record<string, unknown>,
+  );
 
   return createEntityWithNotionId({
     notionId: dataSource.id,

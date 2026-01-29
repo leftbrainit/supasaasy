@@ -519,7 +519,11 @@ Deno.test('[Notion] Collection Keys - all resource types have correct keys', () 
   };
 
   for (const resourceType of resourceTypes) {
-    const entity = notionConnector.normalizeEntity(resourceType, mockData[resourceType], mockAppConfig);
+    const entity = notionConnector.normalizeEntity(
+      resourceType,
+      mockData[resourceType],
+      mockAppConfig,
+    );
 
     assertEquals(
       entity.collectionKey,

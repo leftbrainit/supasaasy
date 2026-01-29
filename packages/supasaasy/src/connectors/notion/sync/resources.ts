@@ -7,7 +7,7 @@
 import type { AppConfig, NormalizedEntity, SyncOptions, SyncResult } from '../../../types/index.ts';
 import { deleteEntity, upsertEntities, type UpsertEntityData } from '../../../db/index.ts';
 import { createTimer, emptySyncResult } from '../../utils.ts';
-import { DEFAULT_PAGE_SIZE, type NotionClient, logger } from '../client.ts';
+import { DEFAULT_PAGE_SIZE, logger, type NotionClient } from '../client.ts';
 import {
   extractDataSourceProperties,
   normalizeDataSource,
