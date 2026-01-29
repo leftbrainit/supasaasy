@@ -474,7 +474,7 @@ export function createWebhookHandler(
 
     try {
       // Extract app_key from URL path
-      appKey = extractAppKey(url);
+      appKey = extractAppKey(url) ?? undefined;
       if (!appKey) {
         const responseBody = { error: 'Invalid webhook URL: missing app_key' };
         logWebhook(
