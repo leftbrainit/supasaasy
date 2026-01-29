@@ -1,5 +1,8 @@
 # SupaSaaSy
 
+> **Warning**
+> This project is currently in **alpha stage** and is not ready for production use. APIs may change without notice. Use at your own risk.
+
 A Supabase-native data sync framework that maintains local copies of data from external providers (Stripe, Intercom, etc.) through webhooks and periodic synchronization.
 
 ## Installation

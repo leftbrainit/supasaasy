@@ -81,7 +81,7 @@ export function createMockProperty(
  * Create a mock Notion data source
  */
 export function createMockDataSource(
-  overrides: Partial<NotionDataSource & { id?: string; title?: string }> = {},
+  overrides: Partial<Omit<NotionDataSource, 'title'> & { id?: string; title?: string }> = {},
 ): NotionDataSource {
   const id = overrides.id ?? '2f26ee68-df30-4251-aad4-8ddc420cba3d';
   const title = overrides.title ?? 'Test Data Source';
@@ -275,7 +275,7 @@ export function createMockWebhookPayload(
  * Create a mock data_source.created webhook event
  */
 export function createMockDataSourceCreatedEvent(
-  dataSourceOverrides: Partial<NotionDataSource & { id?: string }> = {},
+  dataSourceOverrides: Partial<Omit<NotionDataSource, 'title'> & { id?: string; title?: string }> = {},
 ): NotionWebhookPayload {
   const dataSource = createMockDataSource(dataSourceOverrides);
   return createMockWebhookPayload({
@@ -291,7 +291,7 @@ export function createMockDataSourceCreatedEvent(
  * Create a mock data_source.schema_updated webhook event
  */
 export function createMockDataSourceUpdatedEvent(
-  dataSourceOverrides: Partial<NotionDataSource & { id?: string }> = {},
+  dataSourceOverrides: Partial<Omit<NotionDataSource, 'title'> & { id?: string; title?: string }> = {},
 ): NotionWebhookPayload {
   const dataSource = createMockDataSource(dataSourceOverrides);
   return createMockWebhookPayload({
