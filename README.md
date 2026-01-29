@@ -54,6 +54,9 @@ export default defineConfig({
   sync_schedules: [
     { app_key: 'stripe_prod', cron: '0 */6 * * *', enabled: true },
   ],
+  webhook_logging: {
+    enabled: false, // Set to true to log webhook requests to database
+  },
 });
 ```
 
@@ -167,6 +170,56 @@ curl -X POST http://127.0.0.1:54321/functions/v1/sync \
 | `app_key`        | string   | Yes      | The app key to sync                              |
 | `mode`           | string   | No       | `full` or `incremental` (default: `incremental`) |
 | `resource_types` | string[] | No       | Specific resources to sync                       |
+
+## Webhook Logging
+
+SupaSaaSy can optionally log all webhook requests to the database for debugging and auditing purposes.
+
+### Enabling Webhook Logging
+
+```typescript
+// supasaasy.config.ts
+export default defineConfig({
+  // ... apps configuration
+  webhook_logging: {
+    enabled: true, // Enable webhook logging
+  },
+});
+```
+
+When enabled, all webhook requests are logged to the `supasaasy.webhook_logs` table, including:
+
+- **Request details**: HTTP method, path, headers (sensitive values redacted), and body
+- **Response details**: Status code, response body, and error messages
+- **Performance metrics**: Processing duration in milliseconds
+- **Timestamps**: When the webhook was received
+
+### Querying Webhook Logs
+
+```sql
+-- Get recent webhook logs
+SELECT * FROM supasaasy.webhook_logs
+ORDER BY created_at DESC
+LIMIT 100;
+
+-- Find failed webhooks (status >= 400)
+SELECT app_key, response_status, error_message, created_at
+FROM supasaasy.webhook_logs
+WHERE response_status >= 400
+ORDER BY created_at DESC;
+
+-- Analyze webhook performance by app
+SELECT 
+  app_key,
+  COUNT(*) as total_requests,
+  AVG(processing_duration_ms) as avg_duration_ms,
+  MAX(processing_duration_ms) as max_duration_ms
+FROM supasaasy.webhook_logs
+WHERE created_at > NOW() - INTERVAL '24 hours'
+GROUP BY app_key;
+```
+
+**Note**: Sensitive headers (Authorization, webhook signatures, etc.) are automatically redacted before storage.
 
 ## Querying Synced Data
 

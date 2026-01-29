@@ -80,4 +80,21 @@ export default defineConfig({
     //   enabled: true,
     // },
   ],
+
+  // ==========================================================================
+  // Webhook Logging
+  // ==========================================================================
+  // Optional configuration to log webhook requests to the database for
+  // debugging and auditing purposes. When enabled, all webhook requests
+  // (successful, failed, and rejected) are stored in supasaasy.webhook_logs.
+  //
+  // Logs include:
+  // - Request details (method, path, headers with sensitive values redacted)
+  // - Response status and body
+  // - Error messages for failed requests
+  // - Processing duration for performance monitoring
+  //
+  webhook_logging: {
+    enabled: true, // Set to true to enable webhook logging
+  },
 });

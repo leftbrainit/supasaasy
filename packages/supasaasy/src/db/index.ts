@@ -520,3 +520,107 @@ export async function getSyncStates(
     return { data: null, error: err as Error };
   }
 }
+
+// =============================================================================
+// Webhook Logging Types
+// =============================================================================
+
+/**
+ * Webhook log entry data for insertion
+ */
+export interface WebhookLogData {
+  app_key?: string;
+  request_method: string;
+  request_path: string;
+  request_headers: Record<string, string>;
+  request_body?: Record<string, unknown>;
+  response_status: number;
+  response_body?: Record<string, unknown>;
+  error_message?: string;
+  processing_duration_ms?: number;
+}
+
+/**
+ * Sensitive header names that should be redacted in logs
+ */
+const SENSITIVE_HEADERS = [
+  'authorization',
+  'x-webhook-signature',
+  'x-stripe-signature',
+  'x-hub-signature',
+  'x-hub-signature-256',
+  'stripe-signature',
+  'cookie',
+  'set-cookie',
+];
+
+/**
+ * Sanitize headers by redacting sensitive values
+ */
+function sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+  const sanitized: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(headers)) {
+    const lowerKey = key.toLowerCase();
+    if (SENSITIVE_HEADERS.includes(lowerKey)) {
+      sanitized[key] = '[REDACTED]';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
+// =============================================================================
+// Webhook Logging Helper Functions
+// =============================================================================
+
+/**
+ * Insert a webhook log entry into the database.
+ * Sanitizes sensitive headers before storage.
+ * Handles errors gracefully to prevent log failures from affecting webhook processing.
+ *
+ * @param data The webhook log data to insert
+ * @returns The inserted log entry or null if insertion failed
+ */
+export async function insertWebhookLog(
+  data: WebhookLogData,
+): Promise<{ data: any | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    // Sanitize headers to redact sensitive values
+    const sanitizedHeaders = sanitizeHeaders(data.request_headers);
+
+    const record = {
+      app_key: data.app_key ?? null,
+      request_method: data.request_method,
+      request_path: data.request_path,
+      request_headers: sanitizedHeaders,
+      request_body: data.request_body ?? null,
+      response_status: data.response_status,
+      response_body: data.response_body ?? null,
+      error_message: data.error_message ?? null,
+      processing_duration_ms: data.processing_duration_ms ?? null,
+    };
+
+    const { data: result, error } = await client
+      .from('webhook_logs')
+      .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      // Log the error but don't throw - we don't want logging failures to affect webhook processing
+      console.error('Failed to insert webhook log:', error.message);
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: result, error: null };
+  } catch (err) {
+    // Catch any unexpected errors and log them
+    console.error('Unexpected error inserting webhook log:', err);
+    return { data: null, error: err as Error };
+  }
+}
