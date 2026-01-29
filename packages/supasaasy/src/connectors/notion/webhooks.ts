@@ -228,7 +228,6 @@ export async function parseWebhookEvent(
 /**
  * Extract and normalize entity from webhook event
  */
-// deno-lint-ignore require-await
 export async function extractEntity(
   event: ParsedWebhookEvent,
   appConfig: AppConfig,
