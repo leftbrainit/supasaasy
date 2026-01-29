@@ -118,6 +118,12 @@ export interface ConnectorMetadata {
  * Normalized entity matching the supasaasy.entities table schema
  */
 export interface NormalizedEntity {
+  /**
+   * Optional custom UUID for the entity.
+   * When provided, this UUID will be used as the primary key instead of auto-generating one.
+   * Useful for connectors like Notion where the upstream API uses UUIDs that should be preserved.
+   */
+  id?: string;
   /** External provider's ID for this entity */
   externalId: string;
   /** App instance identifier (e.g., 'stripe_production') */

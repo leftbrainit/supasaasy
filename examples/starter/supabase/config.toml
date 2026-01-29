@@ -121,7 +121,7 @@ max_frequency = "1s"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = true
+enable_signup = false
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
@@ -175,6 +175,14 @@ enabled = true
 # Use `oneshot` for hot reload, or `per_worker` for load testing.
 policy = "oneshot"
 inspector_port = 8083
+
+[functions.webhook]
+# Webhooks use signature verification instead of JWT authentication
+verify_jwt = false
+
+[functions.sync]
+# Sync uses ADMIN_API_KEY authentication instead of JWT
+verify_jwt = false
 
 [analytics]
 enabled = true

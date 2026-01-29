@@ -11,6 +11,7 @@ import { getConnector } from '../connectors/index.ts';
 // Import connectors to ensure they register themselves
 import '../connectors/stripe/index.ts';
 import '../connectors/intercom/index.ts';
+import '../connectors/notion/index.ts';
 
 // =============================================================================
 // Core Schema SQL

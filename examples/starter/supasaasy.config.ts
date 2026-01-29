@@ -36,6 +36,29 @@ export default defineConfig({
         webhook_secret_env: 'INTERCOM_WEBHOOK_SECRET',
       },
     },
+
+    // ==========================================================================
+    // Notion Configuration
+    // ==========================================================================
+    // Notion connector syncs data sources (tables), pages, and users from
+    // Notion workspaces. Requires a Notion internal integration with:
+    // - Read content capability
+    // - Read user information capability
+    // - Webhook configuration (Enterprise plan for real-time updates)
+    //
+    // API version: 2025-09-03 (with first-class data source support)
+    //
+    {
+      app_key: 'notion_test',
+      name: 'Notion Test',
+      connector: 'notion',
+      config: {
+        api_key_env: 'NOTION_API_KEY',
+        webhook_secret_env: 'NOTION_WEBHOOK_SECRET',
+      },
+      // Optional: limit historical sync to records created after this date
+      // sync_from: '2024-01-01T00:00:00Z',
+    },
   ],
 
   sync_schedules: [

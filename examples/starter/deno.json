@@ -6,7 +6,7 @@
     "db:push": "supabase db push --local",
     "functions:serve": "supabase functions serve --env-file .env.local",
     "tunnel": "ngrok http 54321",
-    "generate-migrations": "deno run --allow-read --allow-write scripts/generate-migrations.ts"
+    "generate-migrations": "deno run --allow-read --allow-write --allow-sys scripts/generate-migrations.ts"
   },
   "imports": {
     "supasaasy": "../../packages/supasaasy/mod.ts"

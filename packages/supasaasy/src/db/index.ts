@@ -97,6 +97,12 @@ export interface Entity {
  * Data required to upsert an entity
  */
 export interface UpsertEntityData {
+  /**
+   * Optional custom UUID for the entity.
+   * When provided, this UUID will be used as the primary key instead of auto-generating one.
+   * Useful for connectors like Notion where the upstream API uses UUIDs that should be preserved.
+   */
+  id?: string;
   external_id: string;
   app_key: string;
   collection_key: string;
@@ -151,22 +157,27 @@ export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult
 
     const isCreate = !existing;
 
+    // Build the record, including id if provided
+    const record: Record<string, unknown> = {
+      external_id: data.external_id,
+      app_key: data.app_key,
+      collection_key: data.collection_key,
+      raw_payload: data.raw_payload,
+      api_version: data.api_version ?? null,
+      archived_at: data.archived_at ?? null,
+    };
+
+    // Include custom id if provided (e.g., Notion UUIDs)
+    if (data.id) {
+      record.id = data.id;
+    }
+
     // Perform the upsert using the unique constraint
     const { data: result, error } = await client
       .from('entities')
-      .upsert(
-        {
-          external_id: data.external_id,
-          app_key: data.app_key,
-          collection_key: data.collection_key,
-          raw_payload: data.raw_payload,
-          api_version: data.api_version ?? null,
-          archived_at: data.archived_at ?? null,
-        },
-        {
-          onConflict: 'app_key,collection_key,external_id',
-        },
-      )
+      .upsert(record, {
+        onConflict: 'app_key,collection_key,external_id',
+      })
       .select()
       .single();
 
@@ -196,14 +207,23 @@ export async function upsertEntities(
   const client = getSupabaseClient();
 
   try {
-    const records = entities.map((data) => ({
-      external_id: data.external_id,
-      app_key: data.app_key,
-      collection_key: data.collection_key,
-      raw_payload: data.raw_payload,
-      api_version: data.api_version ?? null,
-      archived_at: data.archived_at ?? null,
-    }));
+    const records = entities.map((data) => {
+      const record: Record<string, unknown> = {
+        external_id: data.external_id,
+        app_key: data.app_key,
+        collection_key: data.collection_key,
+        raw_payload: data.raw_payload,
+        api_version: data.api_version ?? null,
+        archived_at: data.archived_at ?? null,
+      };
+
+      // Include custom id if provided (e.g., Notion UUIDs)
+      if (data.id) {
+        record.id = data.id;
+      }
+
+      return record;
+    });
 
     const { data: result, error } = await client
       .from('entities')

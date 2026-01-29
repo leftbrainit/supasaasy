@@ -5,9 +5,9 @@
  * URL pattern: POST /webhook/{app_key}
  */
 
-// For local development, use relative import to the library
+// For local development, the import map in deno.json points to the local library
 // In production, change to: import { createWebhookHandler } from '@supasaasy/core';
-import { createWebhookHandler } from '../../../../../packages/supasaasy/mod.ts';
+import { createWebhookHandler } from 'supasaasy';
 import config from '../../../supasaasy.config.ts';
 
 Deno.serve(createWebhookHandler(config));
