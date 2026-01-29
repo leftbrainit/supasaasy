@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change 05-add-periodic-sync. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Sync Endpoint
 
 The system SHALL provide an endpoint for triggering synchronization.
@@ -21,10 +19,29 @@ The system SHALL provide an endpoint for triggering synchronization.
 - **THEN** the system SHALL return 401 Unauthorized
 - **AND** no sync SHALL be performed
 
+#### Scenario: Admin key uses constant-time comparison
+
+- **WHEN** verifying the admin API key
+- **THEN** the system SHALL use constant-time string comparison
+- **AND** the comparison SHALL NOT be vulnerable to timing attacks
+
 #### Scenario: App key specified
 
 - **WHEN** a sync request is made
 - **THEN** the request SHALL specify which `app_key` to sync
+
+#### Scenario: App key format validated
+
+- **WHEN** a sync request is made with an app_key
+- **THEN** the app_key SHALL be validated for format
+- **AND** only alphanumeric characters, underscores, and hyphens SHALL be allowed
+- **AND** invalid app_key formats SHALL return 400 Bad Request
+
+#### Scenario: Request body size limited
+
+- **WHEN** a sync request is received
+- **THEN** the request body size SHALL be validated
+- **AND** requests exceeding 1MB SHALL be rejected with 413 Payload Too Large
 
 ### Requirement: Full Sync Mode
 
@@ -137,7 +154,7 @@ The system SHALL handle sync failures gracefully.
 #### Scenario: API errors logged
 
 - **WHEN** the SaaS API returns an error
-- **THEN** the error SHALL be logged
+- **THEN** the error SHALL be logged server-side
 - **AND** the sync MAY continue with other entities
 
 #### Scenario: Rate limits respected
@@ -150,3 +167,44 @@ The system SHALL handle sync failures gracefully.
 
 - **WHEN** a sync fails
 - **THEN** re-running the sync SHALL be safe due to idempotency
+
+#### Scenario: Error responses sanitized
+
+- **WHEN** returning error responses to clients
+- **THEN** internal error details SHALL NOT be exposed in the response body
+- **AND** generic error messages SHALL be used for 500 errors (e.g., "Internal server error")
+- **AND** detailed errors SHALL only be logged server-side for debugging
+
+### Requirement: Sync Rate Limiting
+
+The system SHALL implement rate limiting on the sync endpoint to protect against abuse.
+
+#### Scenario: Sync rate limit enforced
+
+- **WHEN** sync requests exceed the configured rate limit
+- **THEN** the system SHALL return 429 Too Many Requests
+- **AND** the response SHALL include a Retry-After header
+
+#### Scenario: Sync rate limit configurable
+
+- **WHEN** the sync handler is initialized
+- **THEN** the rate limit SHALL be configurable
+- **AND** the default SHALL be 10 requests per minute
+
+#### Scenario: Rate limit by API key
+
+- **WHEN** rate limiting is applied to sync
+- **THEN** limits SHALL be tracked per authenticated API key
+- **AND** different API keys SHALL have independent rate limits
+
+### Requirement: CORS Configuration
+
+The sync endpoint SHALL have restrictive CORS settings appropriate for server-to-server communication.
+
+#### Scenario: CORS restricted
+
+- **WHEN** the sync endpoint responds to requests
+- **THEN** CORS headers SHALL NOT use wildcard origins
+- **AND** CORS SHALL only be enabled for preflight OPTIONS requests
+- **AND** API clients SHALL authenticate with Bearer tokens instead of relying on CORS
+

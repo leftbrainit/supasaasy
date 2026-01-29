@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change 03-add-connector-interface. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Connector Metadata
 
 Each connector SHALL provide metadata describing its capabilities and supported resources.
@@ -134,6 +132,12 @@ Connectors SHALL use consistent error types for failure scenarios.
 
 - **WHEN** webhook signature verification fails
 - **THEN** a `WebhookVerificationError` SHALL be thrown
+
+#### Scenario: Webhook verification failure logging
+
+- **WHEN** webhook signature verification fails
+- **THEN** the connector SHALL NOT log signature values (including partial/truncated)
+- **AND** the connector SHALL only log that verification failed with a generic reason
 
 #### Scenario: API rate limit hit
 
@@ -377,6 +381,13 @@ Connectors SHALL validate their configuration before operations.
 - **OR** a direct API key is provided
 - **AND** an error SHALL be returned if neither is available
 
+#### Scenario: Direct secret usage warning
+
+- **WHEN** validating a connector with direct `api_key` or `webhook_secret` values
+- **THEN** the validator SHALL log a warning about security implications
+- **AND** the warning SHALL recommend using environment variables instead
+- **AND** in production environment, direct secrets SHALL be rejected with an error
+
 #### Scenario: Webhook secret validation
 
 - **WHEN** validating a connector for an app that receives webhooks
@@ -401,3 +412,27 @@ Connectors SHALL validate their configuration before operations.
 - **THEN** the error message SHALL identify the specific field
 - **AND** the message SHALL describe what is wrong
 - **AND** the message SHALL suggest how to fix it
+
+### Requirement: Secret Handling Security
+
+Connectors SHALL handle secrets securely and never expose them in logs or errors.
+
+#### Scenario: Secrets never logged
+
+- **WHEN** processing API keys or webhook secrets
+- **THEN** the connector SHALL NOT log secret values
+- **AND** the connector SHALL NOT include secrets in error messages
+- **AND** debug logging SHALL sanitize any fields that might contain secrets
+
+#### Scenario: Environment variable precedence
+
+- **WHEN** both `api_key_env` and `api_key` are configured
+- **THEN** the environment variable SHALL take precedence
+- **AND** the direct secret SHALL be ignored
+
+#### Scenario: Production environment protection
+
+- **WHEN** running in a production environment (Deno Deploy or explicit production flag)
+- **THEN** direct `api_key` and `webhook_secret` values SHALL be rejected
+- **AND** an error SHALL be thrown requiring environment variables
+

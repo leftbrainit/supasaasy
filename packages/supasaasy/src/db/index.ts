@@ -42,31 +42,6 @@ export function getSupabaseClient(): SupabaseClient {
 }
 
 /**
- * Execute a query within the supasaasy schema
- */
-export async function query<T = unknown>(
-  sql: string,
-  params?: unknown[],
-): Promise<{ data: T[] | null; error: Error | null }> {
-  const client = getSupabaseClient();
-
-  try {
-    const { data, error } = await client.rpc('exec_sql', {
-      query: sql,
-      params: params || [],
-    });
-
-    if (error) {
-      return { data: null, error: new Error(error.message) };
-    }
-
-    return { data: data as T[], error: null };
-  } catch (err) {
-    return { data: null, error: err as Error };
-  }
-}
-
-/**
  * Reset the client (useful for testing)
  */
 export function resetClient(): void {

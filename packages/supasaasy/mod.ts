@@ -110,7 +110,6 @@ export {
   getSupabaseClient,
   getSyncState,
   getSyncStates,
-  query,
   resetClient,
   type SyncState,
   updateSyncState,
