@@ -1,8 +1,11 @@
 # notion-connector Specification
 
 ## Purpose
+
 TBD - created by archiving change add-notion-connector. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Notion Connector Registration
 
 The Notion connector SHALL be registered with the connector registry.
@@ -270,4 +273,3 @@ The connector SHALL handle Notion API rate limits gracefully.
 
 - **WHEN** a rate limit is encountered
 - **THEN** the connector SHALL log the rate limit for visibility
-

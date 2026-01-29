@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 04-add-webhook-infrastructure. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Webhook Endpoint
 
 The system SHALL expose a webhook endpoint for receiving SaaS provider events.
@@ -173,4 +175,3 @@ The system SHALL implement rate limiting to protect against abuse.
 - **WHEN** rate limiting is applied
 - **THEN** limits SHALL be tracked per source IP or per app_key
 - **AND** legitimate requests from different sources SHALL not be affected by others
-

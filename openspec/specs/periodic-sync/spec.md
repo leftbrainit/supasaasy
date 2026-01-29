@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 05-add-periodic-sync. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Sync Endpoint
 
 The system SHALL provide an endpoint for triggering synchronization.
@@ -207,4 +209,3 @@ The sync endpoint SHALL have restrictive CORS settings appropriate for server-to
 - **THEN** CORS headers SHALL NOT use wildcard origins
 - **AND** CORS SHALL only be enabled for preflight OPTIONS requests
 - **AND** API clients SHALL authenticate with Bearer tokens instead of relying on CORS
-

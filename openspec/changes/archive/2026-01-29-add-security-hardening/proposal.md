@@ -3,6 +3,7 @@
 ## Why
 
 Several medium-severity security issues remain:
+
 1. Admin API key comparison uses `===` which may be vulnerable to timing attacks
 2. No input validation on `app_key` format (could allow injection or path traversal)
 3. No request body size limits (DoS via large payloads)

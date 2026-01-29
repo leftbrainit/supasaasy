@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 03-add-connector-interface. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Connector Metadata
 
 Each connector SHALL provide metadata describing its capabilities and supported resources.
@@ -435,4 +437,3 @@ Connectors SHALL handle secrets securely and never expose them in logs or errors
 - **WHEN** running in a production environment (Deno Deploy or explicit production flag)
 - **THEN** direct `api_key` and `webhook_secret` values SHALL be rejected
 - **AND** an error SHALL be thrown requiring environment variables
-
