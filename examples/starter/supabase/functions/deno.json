@@ -3,6 +3,7 @@
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
     "stripe": "npm:stripe@17",
     "supasaasy": "../../../../packages/supasaasy/mod.ts",
-    "supasaasy/": "../../../../packages/supasaasy/"
+    "supasaasy/": "../../../../packages/supasaasy/",
+    "@config": "../../supasaasy.config.ts"
   }
 }

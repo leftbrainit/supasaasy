@@ -11,6 +11,6 @@
 // For local development, the import map in deno.json points to the local library
 // In production, change to: import { createSyncHandler } from '@supasaasy/core';
 import { createSyncHandler } from 'supasaasy';
-import config from '../../../supasaasy.config.ts';
+import config from '@config';
 
 Deno.serve(createSyncHandler(config));
