@@ -389,14 +389,10 @@ export async function syncConversations(
           }
         }
 
-        // Check pagination - conversations search uses page-based pagination
-        const currentPage = response.pages?.page ?? 1;
-        const totalPages = response.pages?.total_pages ?? 1;
-        hasMore = currentPage < totalPages;
-        // Note: For now, we only sync the first page due to API limitations
+        // Check pagination - conversations search supports cursor-based pagination
+        hasMore = response.pages?.next?.starting_after !== undefined;
         if (hasMore) {
-          hasMore = false;
-          logger.warn('sync', 'Intercom conversation search pagination limited to first page');
+          cursor = response.pages?.next?.starting_after;
         }
 
         // Check limit
@@ -475,18 +471,10 @@ export async function syncConversations(
           }
         }
 
-        // Check pagination - conversations uses page-based pagination
-        const currentPage = response.pages?.page ?? 1;
-        const totalPages = response.pages?.total_pages ?? 1;
-        hasMore = currentPage < totalPages;
-        // Note: Intercom conversation list doesn't support cursor-based pagination
-        // For now, we only sync the first page. For full pagination, we'd need to
-        // use page numbers, but the API may have limitations.
+        // Check pagination - conversations supports cursor-based pagination
+        hasMore = response.pages?.next?.starting_after !== undefined;
         if (hasMore) {
-          // Intercom conversations API doesn't support starting_after for list
-          // We can only get one page for now
-          hasMore = false;
-          logger.warn('sync', 'Intercom conversations pagination limited to first page');
+          cursor = response.pages?.next?.starting_after;
         }
 
         // Check limit
