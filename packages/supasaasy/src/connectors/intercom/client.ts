@@ -11,7 +11,6 @@ import { createConnectorLogger } from '../utils.ts';
 import type {
   IntercomAdmin,
   IntercomAppConfig,
-  IntercomCompany,
   IntercomCompanyListResponse,
   IntercomContact,
   IntercomConversation,
