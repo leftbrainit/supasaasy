@@ -62,6 +62,8 @@ export {
 
 export { createWebhookHandler } from './src/handlers/webhook.ts';
 export { createSyncHandler } from './src/handlers/sync.ts';
+export { createWorkerHandler } from './src/handlers/worker.ts';
+export { createJobStatusHandler } from './src/handlers/job-status.ts';
 
 // =============================================================================
 // Migration Generation
@@ -100,6 +102,12 @@ export type {
 // =============================================================================
 
 export {
+  // Job-based sync utilities
+  claimTask,
+  cleanupOldJobs,
+  createJobTasks,
+  createSyncJob,
+  type CreateSyncJobData,
   deleteEntities,
   deleteEntity,
   type DeleteResult,
@@ -107,12 +115,21 @@ export {
   getEntity,
   getEntityExternalIds,
   getEntityExternalIdsCreatedAfter,
+  getJobStatus,
   getSupabaseClient,
   getSyncState,
   getSyncStates,
   resetClient,
+  type SyncJob,
+  type SyncJobStatus,
+  type SyncJobStatusWithStats,
+  type SyncJobTask,
+  type SyncJobTaskStatus,
   type SyncState,
+  updateJobStatus,
   updateSyncState,
+  updateTaskHeartbeat,
+  updateTaskStatus,
   upsertEntities,
   upsertEntity,
   type UpsertEntityData,

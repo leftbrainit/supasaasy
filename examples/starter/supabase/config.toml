@@ -173,7 +173,11 @@ skip_nonce_check = false
 enabled = true
 # Configure one of the supported request policies: `oneshot`, `per_worker`.
 # Use `oneshot` for hot reload, or `per_worker` for load testing.
-policy = "oneshot"
+# IMPORTANT: `per_worker` is required for background tasks (EdgeRuntime.waitUntil)
+# to complete. Without this, worker functions will terminate immediately after
+# returning a response, preventing graceful shutdown handlers from running.
+# See: https://supabase.com/docs/guides/functions/background-tasks
+policy = "per_worker"
 inspector_port = 8083
 
 [functions.webhook]
@@ -182,6 +186,14 @@ verify_jwt = false
 
 [functions.sync]
 # Sync uses ADMIN_API_KEY authentication instead of JWT
+verify_jwt = false
+
+[functions.worker]
+# Worker uses ADMIN_API_KEY authentication instead of JWT
+verify_jwt = false
+
+[functions.job-status]
+# Job status uses ADMIN_API_KEY authentication instead of JWT
 verify_jwt = false
 
 [analytics]

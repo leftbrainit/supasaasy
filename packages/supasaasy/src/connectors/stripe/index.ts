@@ -82,6 +82,7 @@ const SUPPORTED_RESOURCES: SupportedResource[] = [
     description: 'Stripe subscription items',
     supportsIncrementalSync: false,
     supportsWebhooks: false,
+    syncedWithParent: 'subscription',
   },
 ];
 

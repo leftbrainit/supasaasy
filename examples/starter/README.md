@@ -66,7 +66,11 @@ examples/starter/
 │   ├── functions/
 │   │   ├── webhook/       # Webhook handler
 │   │   │   └── index.ts
-│   │   └── sync/          # Sync handler
+│   │   ├── sync/          # Sync handler
+│   │   │   └── index.ts
+│   │   ├── worker/        # Worker handler for job-based sync
+│   │   │   └── index.ts
+│   │   └── job-status/    # Job status query handler
 │   │       └── index.ts
 │   └── migrations/        # Generated migrations
 │       └── 00000000000001_supasaasy.sql
@@ -124,13 +128,49 @@ export default defineConfig({
 
 ### Manual Sync
 
-Trigger a sync via HTTP:
+#### Job-Based Sync (Default)
+
+For large datasets, SupaSaaSy uses job-based processing with database polling.
+
+```bash
+# 1. Start a sync job
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Authorization: Bearer your-admin-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"app_key": "stripe_prod", "mode": "full"}'
+
+# Response includes job_id and task info
+{
+  "success": true,
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "app_key": "stripe_prod",
+  "mode": "full",
+  "status": "pending",
+  "total_tasks": 5,
+  "resource_types": ["customer", "product", "price", "plan", "subscription"]
+}
+
+# 2. Start a worker to process the job
+curl -X POST http://127.0.0.1:54321/functions/v1/worker \
+  -H "Authorization: Bearer your-admin-api-key" \
+  -d '{"job_id": "123e4567-e89b-12d3-a456-426614174000"}'
+
+# 3. Check job status
+curl -X GET "http://127.0.0.1:54321/functions/v1/job-status/123e4567-e89b-12d3-a456-426614174000" \
+  -H "Authorization: Bearer your-admin-api-key"
+```
+
+Workers poll the database for pending tasks and process them serially. This works in both local development and production.
+
+#### Immediate Sync (Small Datasets)
+
+For small datasets or testing, use immediate mode for synchronous execution:
 
 ```bash
 curl -X POST http://127.0.0.1:54321/functions/v1/sync \
   -H "Authorization: Bearer your-admin-api-key" \
   -H "Content-Type: application/json" \
-  -d '{"app_key": "stripe_prod", "mode": "full"}'
+  -d '{"app_key": "stripe_prod", "mode": "full", "immediate": true}'
 ```
 
 ### Query Synced Data
@@ -141,6 +181,12 @@ SELECT * FROM supasaasy.entities;
 
 -- View Stripe customers (if Stripe connector is configured)
 SELECT * FROM supasaasy.stripe_customers;
+
+-- Monitor sync job progress
+SELECT * FROM supasaasy.sync_jobs ORDER BY created_at DESC LIMIT 10;
+
+-- View job tasks
+SELECT * FROM supasaasy.sync_job_tasks WHERE job_id = 'your-job-id';
 ```
 
 ## Upgrading SupaSaaSy

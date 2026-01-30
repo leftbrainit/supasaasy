@@ -624,3 +624,465 @@ export async function insertWebhookLog(
     return { data: null, error: err as Error };
   }
 }
+
+// =============================================================================
+// Sync Jobs Types
+// =============================================================================
+
+export type SyncJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type SyncJobTaskStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Sync job record as stored in the database
+ */
+export interface SyncJob {
+  id: string;
+  app_key: string;
+  mode: string;
+  resource_types: string[] | null;
+  status: SyncJobStatus;
+  total_tasks: number;
+  completed_tasks: number;
+  failed_tasks: number;
+  processed_entities: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  /** Flag to trigger worker spawning via pg_net */
+  needs_worker: boolean;
+  /** Timestamp of last worker spawn attempt */
+  worker_spawned_at: string | null;
+}
+
+/**
+ * Sync job task record as stored in the database
+ */
+export interface SyncJobTask {
+  id: string;
+  job_id: string;
+  resource_type: string;
+  status: SyncJobTaskStatus;
+  entity_count: number | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  /** Pagination cursor for resuming interrupted syncs */
+  cursor: string | null;
+  /** Last heartbeat timestamp from worker processing this task */
+  last_heartbeat: string | null;
+}
+
+/**
+ * Data required to create a sync job
+ */
+export interface CreateSyncJobData {
+  app_key: string;
+  mode: string;
+  resource_types?: string[];
+}
+
+/**
+ * Job status with aggregated statistics
+ */
+export interface SyncJobStatusWithStats extends SyncJob {
+  progress_percentage: number;
+  tasks: SyncJobTask[];
+}
+
+// =============================================================================
+// Sync Jobs Helper Functions
+// =============================================================================
+
+/**
+ * Create a new sync job and return the created record.
+ *
+ * @param data The sync job data
+ * @returns The created sync job
+ */
+export async function createSyncJob(
+  data: CreateSyncJobData,
+): Promise<{ data: SyncJob | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const record = {
+      app_key: data.app_key,
+      mode: data.mode,
+      resource_types: data.resource_types ?? null,
+      status: 'pending' as SyncJobStatus,
+    };
+
+    const { data: result, error } = await client
+      .from('sync_jobs')
+      .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: result as SyncJob, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Update a sync job's status and related fields atomically.
+ *
+ * @param jobId The job ID to update
+ * @param updates Partial job data to update
+ * @returns The updated sync job
+ */
+export async function updateJobStatus(
+  jobId: string,
+  updates: {
+    status?: SyncJobStatus;
+    completed_tasks?: number;
+    failed_tasks?: number;
+    processed_entities?: number;
+    started_at?: Date;
+    completed_at?: Date;
+    error_message?: string;
+    needs_worker?: boolean;
+  },
+): Promise<{ data: SyncJob | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const record: Record<string, unknown> = {};
+
+    if (updates.status !== undefined) record.status = updates.status;
+    if (updates.completed_tasks !== undefined) record.completed_tasks = updates.completed_tasks;
+    if (updates.failed_tasks !== undefined) record.failed_tasks = updates.failed_tasks;
+    if (updates.processed_entities !== undefined) {
+      record.processed_entities = updates.processed_entities;
+    }
+    if (updates.started_at !== undefined) record.started_at = updates.started_at.toISOString();
+    if (updates.completed_at !== undefined) {
+      record.completed_at = updates.completed_at.toISOString();
+    }
+    if (updates.error_message !== undefined) record.error_message = updates.error_message;
+    if (updates.needs_worker !== undefined) record.needs_worker = updates.needs_worker;
+
+    const { data, error } = await client
+      .from('sync_jobs')
+      .update(record)
+      .eq('id', jobId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncJob, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Create tasks for a job - one task per resource type.
+ *
+ * @param jobId The job ID these tasks belong to
+ * @param resourceTypes Array of resource types to create tasks for
+ * @returns Array of created tasks
+ */
+export async function createJobTasks(
+  jobId: string,
+  resourceTypes: string[],
+): Promise<{ data: SyncJobTask[] | null; error: Error | null }> {
+  if (resourceTypes.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const client = getSupabaseClient();
+
+  try {
+    const records = resourceTypes.map((resourceType) => ({
+      job_id: jobId,
+      resource_type: resourceType,
+      status: 'pending' as SyncJobTaskStatus,
+    }));
+
+    const { data, error } = await client
+      .from('sync_job_tasks')
+      .insert(records)
+      .select();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    // Update the job's total_tasks count
+    await client
+      .from('sync_jobs')
+      .update({ total_tasks: resourceTypes.length })
+      .eq('id', jobId);
+
+    return { data: data as SyncJobTask[], error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Atomically claim a pending task by updating its status to processing.
+ * Returns null if no tasks are available or all are claimed.
+ *
+ * @param jobId The job ID (optional - if not provided, claims from any job)
+ * @returns The claimed task or null if none available
+ */
+export async function claimTask(
+  jobId?: string,
+): Promise<{ data: SyncJobTask | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    // Find the next pending task (optionally filtered by job)
+    let query = client
+      .from('sync_job_tasks')
+      .select()
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    // Only filter by job_id if provided
+    if (jobId) {
+      query = query.eq('job_id', jobId);
+    }
+
+    const { data: pending, error: findError } = await query.maybeSingle();
+
+    if (findError) {
+      return { data: null, error: new Error(findError.message) };
+    }
+
+    if (!pending) {
+      // No pending tasks available
+      return { data: null, error: null };
+    }
+
+    // Atomically update the task status to processing
+    const { data: claimed, error: updateError } = await client
+      .from('sync_job_tasks')
+      .update({
+        status: 'processing' as SyncJobTaskStatus,
+        started_at: new Date().toISOString(),
+      })
+      .eq('id', pending.id)
+      .eq('status', 'pending') // Double-check it's still pending
+      .select()
+      .maybeSingle();
+
+    if (updateError) {
+      return { data: null, error: new Error(updateError.message) };
+    }
+
+    if (!claimed) {
+      // Task was claimed by another worker
+      return { data: null, error: null };
+    }
+
+    return { data: claimed as SyncJobTask, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Update a task's status after processing.
+ *
+ * @param taskId The task ID
+ * @param status New status (completed or failed)
+ * @param entityCount Number of entities processed (optional)
+ * @param errorMessage Error message if failed (optional)
+ * @param cursor Pagination cursor for resuming (optional)
+ * @returns The updated task
+ */
+export async function updateTaskStatus(
+  taskId: string,
+  status: 'completed' | 'failed',
+  entityCount?: number,
+  errorMessage?: string,
+  cursor?: string | null,
+): Promise<{ data: SyncJobTask | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const updates: Record<string, unknown> = {
+      status,
+      completed_at: new Date().toISOString(),
+      last_heartbeat: new Date().toISOString(),
+    };
+
+    if (entityCount !== undefined) {
+      updates.entity_count = entityCount;
+    }
+
+    if (errorMessage !== undefined) {
+      updates.error_message = errorMessage;
+    }
+
+    if (cursor !== undefined) {
+      updates.cursor = cursor;
+    }
+
+    const { data, error } = await client
+      .from('sync_job_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncJobTask, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Update a task's heartbeat and optionally cursor during processing.
+ * Call this periodically to indicate the worker is still alive.
+ *
+ * @param taskId The task ID
+ * @param cursor Current pagination cursor (optional)
+ * @param entityCount Current entity count (optional)
+ * @returns The updated task
+ */
+export async function updateTaskHeartbeat(
+  taskId: string,
+  cursor?: string | null,
+  entityCount?: number,
+): Promise<{ data: SyncJobTask | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const updates: Record<string, unknown> = {
+      last_heartbeat: new Date().toISOString(),
+    };
+
+    if (cursor !== undefined) {
+      updates.cursor = cursor;
+    }
+
+    if (entityCount !== undefined) {
+      updates.entity_count = entityCount;
+    }
+
+    const { data, error } = await client
+      .from('sync_job_tasks')
+      .update(updates)
+      .eq('id', taskId)
+      .select()
+      .single();
+
+    if (error) {
+      return { data: null, error: new Error(error.message) };
+    }
+
+    return { data: data as SyncJobTask, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Get job status with aggregated task statistics and progress.
+ *
+ * @param jobId The job ID
+ * @returns Job with progress percentage and tasks
+ */
+export async function getJobStatus(
+  jobId: string,
+): Promise<{ data: SyncJobStatusWithStats | null; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    // Get job data
+    const { data: job, error: jobError } = await client
+      .from('sync_jobs')
+      .select()
+      .eq('id', jobId)
+      .maybeSingle();
+
+    if (jobError) {
+      return { data: null, error: new Error(jobError.message) };
+    }
+
+    if (!job) {
+      return { data: null, error: null };
+    }
+
+    // Get all tasks for this job
+    const { data: tasks, error: tasksError } = await client
+      .from('sync_job_tasks')
+      .select()
+      .eq('job_id', jobId)
+      .order('created_at', { ascending: true });
+
+    if (tasksError) {
+      return { data: null, error: new Error(tasksError.message) };
+    }
+
+    const typedJob = job as SyncJob;
+    const typedTasks = (tasks || []) as SyncJobTask[];
+
+    // Calculate progress percentage
+    const progress_percentage = typedJob.total_tasks > 0
+      ? Math.round(
+        ((typedJob.completed_tasks + typedJob.failed_tasks) / typedJob.total_tasks) * 100,
+      )
+      : 0;
+
+    const result: SyncJobStatusWithStats = {
+      ...typedJob,
+      progress_percentage,
+      tasks: typedTasks,
+    };
+
+    return { data: result, error: null };
+  } catch (err) {
+    return { data: null, error: err as Error };
+  }
+}
+
+/**
+ * Delete completed or failed jobs older than the specified retention period.
+ * Default retention is 7 days.
+ *
+ * @param retentionDays Number of days to retain jobs (default: 7)
+ * @returns Number of jobs deleted
+ */
+export async function cleanupOldJobs(
+  retentionDays = 7,
+): Promise<{ count: number; error: Error | null }> {
+  const client = getSupabaseClient();
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const { count, error } = await client
+      .from('sync_jobs')
+      .delete({ count: 'exact' })
+      .in('status', ['completed', 'failed'])
+      .lt('created_at', cutoffDate.toISOString());
+
+    if (error) {
+      return { count: 0, error: new Error(error.message) };
+    }
+
+    return { count: count ?? 0, error: null };
+  } catch (err) {
+    return { count: 0, error: err as Error };
+  }
+}
