@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change 03-add-connector-interface. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Connector Metadata
 
 Each connector SHALL provide metadata describing its capabilities and supported resources.
@@ -561,4 +563,3 @@ Debug logging SHALL not expose sensitive information.
 - **WHEN** debug mode is enabled and request bodies are logged
 - **THEN** sensitive fields (passwords, tokens, secrets) SHALL be redacted
 - **AND** the redaction SHALL replace values with "[REDACTED]"
-
