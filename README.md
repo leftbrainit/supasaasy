@@ -170,6 +170,144 @@ curl -X POST http://127.0.0.1:54321/functions/v1/sync \
 | `app_key`        | string   | Yes      | The app key to sync                              |
 | `mode`           | string   | No       | `full` or `incremental` (default: `incremental`) |
 | `resource_types` | string[] | No       | Specific resources to sync                       |
+| `immediate`      | boolean  | No       | Run sync immediately (default: `false`, uses job-based processing) |
+
+### Job-Based Sync Processing
+
+By default, sync operations now use **job-based processing** to handle large datasets that exceed Supabase Edge Function limits (50 seconds wall time, 10 seconds CPU time, ~512MB memory).
+
+#### How It Works
+
+1. **Job Creation**: When you trigger a sync, SupaSaaSy creates a `sync_job` record with one task per resource type
+2. **Worker Processing**: A worker function processes tasks serially, with each task syncing one resource type completely
+3. **Progress Tracking**: Query the job status endpoint to monitor progress in real-time
+4. **Automatic Completion**: Worker continues until all tasks are processed or approaches the edge function time limit
+
+#### Response Format
+
+Job-based sync returns immediately with job metadata:
+
+```json
+{
+  "success": true,
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "app_key": "stripe_prod",
+  "mode": "full",
+  "status": "pending",
+  "total_tasks": 5,
+  "resource_types": ["customer", "product", "price", "plan", "subscription"]
+}
+```
+
+#### Checking Job Status
+
+Query the job status endpoint to track progress:
+
+```bash
+curl -X GET "http://127.0.0.1:54321/functions/v1/job-status/{job_id}" \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+Response includes progress and task statistics:
+
+```json
+{
+  "success": true,
+  "job_id": "123e4567-e89b-12d3-a456-426614174000",
+  "app_key": "stripe_prod",
+  "mode": "full",
+  "status": "processing",
+  "progress_percentage": 60,
+  "total_tasks": 5,
+  "completed_tasks": 3,
+  "failed_tasks": 0,
+  "processed_entities": 3000,
+  "created_at": "2026-01-29T12:34:00.000Z",
+  "started_at": "2026-01-29T12:34:01.000Z",
+  "completed_at": null,
+  "error_message": null
+}
+```
+
+Add `?include_tasks=true` to see detailed task information:
+
+```bash
+curl -X GET "http://127.0.0.1:54321/functions/v1/job-status/{job_id}?include_tasks=true" \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+```
+
+#### Immediate Mode
+
+For small datasets or testing, use `immediate: true` to run sync synchronously:
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/sync \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"app_key": "stripe_prod", "mode": "full", "immediate": true}'
+```
+
+This returns the traditional sync response with immediate results.
+
+#### Required Edge Functions
+
+To use job-based sync, deploy these Edge Functions:
+
+```typescript
+// supabase/functions/worker/index.ts
+import { createWorkerHandler } from 'supasaasy';
+import config from '../../../supasaasy.config.ts';
+
+Deno.serve(createWorkerHandler(config));
+```
+
+```typescript
+// supabase/functions/job-status/index.ts
+import { createJobStatusHandler } from 'supasaasy';
+import config from '../../../supasaasy.config.ts';
+
+Deno.serve(createJobStatusHandler(config));
+```
+
+And add to `supabase/config.toml`:
+
+```toml
+[functions.worker]
+verify_jwt = false
+
+[functions.job-status]
+verify_jwt = false
+```
+
+#### Starting Workers
+
+Workers use **database polling** to find and process tasks. After creating a sync job, start a worker:
+
+```bash
+# Start a worker (processes tasks until none remain or timeout approaches)
+curl -X POST http://127.0.0.1:54321/functions/v1/worker \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{}'
+
+# Or specify a specific job
+curl -X POST http://127.0.0.1:54321/functions/v1/worker \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"job_id": "your-job-id"}'
+
+# Limit maximum tasks to process
+curl -X POST http://127.0.0.1:54321/functions/v1/worker \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"max_tasks": 3}'
+```
+
+**How it works:**
+1. Sync handler creates job and tasks in database (one task per resource type)
+2. Worker polls database for pending tasks
+3. Worker atomically claims a task and processes the entire resource using connector's pagination
+4. Worker continues to next task until no pending tasks remain or timeout approaches
+5. Job completes when all tasks are processed
+
+This database-based approach works in both local development and production without needing HTTP communication between Edge Functions.
 
 ## Webhook Logging
 

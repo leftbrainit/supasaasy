@@ -73,6 +73,7 @@ const SUPPORTED_RESOURCES: SupportedResource[] = [
     description: 'Intercom conversation parts (messages)',
     supportsIncrementalSync: false, // Synced with conversations
     supportsWebhooks: false, // Synced via conversation webhooks
+    syncedWithParent: 'conversation',
   },
 ];
 

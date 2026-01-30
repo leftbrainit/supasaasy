@@ -94,6 +94,11 @@ export interface SupportedResource {
   supportsIncrementalSync: boolean;
   /** Whether this resource can be synced via webhooks */
   supportsWebhooks: boolean;
+  /**
+   * If set, this resource is synced as part of its parent resource and should not have its own sync task.
+   * Example: 'subscription_item' is synced with 'subscription', 'conversation_part' with 'conversation'
+   */
+  syncedWithParent?: string;
 }
 
 /**

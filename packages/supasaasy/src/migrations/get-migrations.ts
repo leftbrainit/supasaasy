@@ -180,6 +180,250 @@ CREATE INDEX IF NOT EXISTS idx_webhook_logs_app_key_created_at ON supasaasy.webh
 -- Grant permissions
 GRANT SELECT ON supasaasy.webhook_logs TO authenticated;
 GRANT ALL ON supasaasy.webhook_logs TO service_role;
+
+-- =============================================================================
+-- Sync Jobs Table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS supasaasy.sync_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  app_key TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  resource_types TEXT[],
+  status TEXT NOT NULL DEFAULT 'pending',
+  total_tasks INTEGER NOT NULL DEFAULT 0,
+  completed_tasks INTEGER NOT NULL DEFAULT 0,
+  failed_tasks INTEGER NOT NULL DEFAULT 0,
+  processed_entities INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  error_message TEXT,
+  -- Worker continuation support
+  needs_worker BOOLEAN NOT NULL DEFAULT true,
+  worker_spawned_at TIMESTAMPTZ
+);
+
+COMMENT ON TABLE supasaasy.sync_jobs IS 'Tracks batch sync job metadata and progress';
+COMMENT ON COLUMN supasaasy.sync_jobs.app_key IS 'App key the job is running for';
+COMMENT ON COLUMN supasaasy.sync_jobs.mode IS 'Sync mode: full or incremental';
+COMMENT ON COLUMN supasaasy.sync_jobs.resource_types IS 'Array of resource types being synced';
+COMMENT ON COLUMN supasaasy.sync_jobs.status IS 'Job status: pending, processing, completed, failed, cancelled';
+COMMENT ON COLUMN supasaasy.sync_jobs.total_tasks IS 'Total number of resource sync tasks for this job';
+COMMENT ON COLUMN supasaasy.sync_jobs.completed_tasks IS 'Number of tasks successfully completed';
+COMMENT ON COLUMN supasaasy.sync_jobs.failed_tasks IS 'Number of tasks that failed';
+COMMENT ON COLUMN supasaasy.sync_jobs.processed_entities IS 'Total number of entities processed across all tasks';
+COMMENT ON COLUMN supasaasy.sync_jobs.needs_worker IS 'Flag to trigger worker spawning via pg_net';
+COMMENT ON COLUMN supasaasy.sync_jobs.worker_spawned_at IS 'Timestamp of last worker spawn attempt';
+
+-- Status check constraint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'sync_jobs_status_check'
+  ) THEN
+    ALTER TABLE supasaasy.sync_jobs
+    ADD CONSTRAINT sync_jobs_status_check
+    CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled'));
+  END IF;
+END $$;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_id ON supasaasy.sync_jobs (id);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_app_key ON supasaasy.sync_jobs (app_key);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_status ON supasaasy.sync_jobs (status);
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_created_at ON supasaasy.sync_jobs (created_at DESC);
+
+-- Grant permissions
+GRANT SELECT ON supasaasy.sync_jobs TO authenticated;
+GRANT ALL ON supasaasy.sync_jobs TO service_role;
+
+-- =============================================================================
+-- Sync Job Tasks Table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS supasaasy.sync_job_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL,
+  resource_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  entity_count INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  error_message TEXT,
+  -- Pagination cursor for resumable sync
+  cursor TEXT,
+  -- Heartbeat for detecting stuck tasks
+  last_heartbeat TIMESTAMPTZ
+);
+
+COMMENT ON TABLE supasaasy.sync_job_tasks IS 'Individual resource sync tasks for batch sync jobs';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.job_id IS 'Foreign key to sync_jobs';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.resource_type IS 'Resource type this task syncs (e.g., customer, subscription)';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.status IS 'Task status: pending, processing, completed, failed';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.entity_count IS 'Number of entities processed by this task';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.cursor IS 'Pagination cursor for resuming interrupted syncs';
+COMMENT ON COLUMN supasaasy.sync_job_tasks.last_heartbeat IS 'Last heartbeat timestamp from worker processing this task';
+
+-- Foreign key constraint with cascade delete
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'sync_job_tasks_job_id_fkey'
+  ) THEN
+    ALTER TABLE supasaasy.sync_job_tasks
+    ADD CONSTRAINT sync_job_tasks_job_id_fkey
+    FOREIGN KEY (job_id) REFERENCES supasaasy.sync_jobs(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+-- Status check constraint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'sync_job_tasks_status_check'
+  ) THEN
+    ALTER TABLE supasaasy.sync_job_tasks
+    ADD CONSTRAINT sync_job_tasks_status_check
+    CHECK (status IN ('pending', 'processing', 'completed', 'failed'));
+  END IF;
+END $$;
+
+-- Unique constraint on job_id and resource_type (one task per resource per job)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'sync_job_tasks_job_resource_unique'
+  ) THEN
+    ALTER TABLE supasaasy.sync_job_tasks
+    ADD CONSTRAINT sync_job_tasks_job_resource_unique
+    UNIQUE (job_id, resource_type);
+  END IF;
+END $$;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_sync_job_tasks_job_id ON supasaasy.sync_job_tasks (job_id);
+CREATE INDEX IF NOT EXISTS idx_sync_job_tasks_status ON supasaasy.sync_job_tasks (status);
+
+-- Grant permissions
+GRANT SELECT ON supasaasy.sync_job_tasks TO authenticated;
+GRANT ALL ON supasaasy.sync_job_tasks TO service_role;
+
+-- =============================================================================
+-- Worker Auto-Spawn Trigger (requires pg_net extension)
+-- =============================================================================
+-- This trigger automatically spawns a worker Edge Function when:
+-- 1. A new job is created with needs_worker = true
+-- 2. An existing job has needs_worker set to true (for worker chaining)
+--
+-- Prerequisites:
+-- 1. Enable pg_net extension: CREATE EXTENSION IF NOT EXISTS pg_net;
+-- 2. Set SUPABASE_URL in vault or as a database setting
+-- 3. Set ADMIN_API_KEY in vault or as a database setting
+--
+-- The trigger uses pg_net.http_post to asynchronously call the worker function.
+-- =============================================================================
+
+-- Enable pg_net extension if not already enabled
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
+
+-- Function to spawn a worker via pg_net
+CREATE OR REPLACE FUNCTION supasaasy.spawn_worker()
+RETURNS TRIGGER AS $$
+DECLARE
+  supabase_url TEXT;
+  admin_api_key TEXT;
+  worker_url TEXT;
+  request_body TEXT;
+BEGIN
+  -- Only spawn if needs_worker is true and job is not completed/failed/cancelled
+  IF NEW.needs_worker = true AND NEW.status NOT IN ('completed', 'failed', 'cancelled') THEN
+    -- Get configuration from environment or vault
+    -- Try to get from current_setting first (can be set via SET command or config)
+    BEGIN
+      supabase_url := current_setting('app.supabase_url', true);
+    EXCEPTION WHEN OTHERS THEN
+      supabase_url := NULL;
+    END;
+    
+    BEGIN
+      admin_api_key := current_setting('app.admin_api_key', true);
+    EXCEPTION WHEN OTHERS THEN
+      admin_api_key := NULL;
+    END;
+    
+    -- If not found, check for common environment patterns
+    IF supabase_url IS NULL THEN
+      -- For local development, default to localhost
+      supabase_url := COALESCE(
+        current_setting('app.settings.supabase_url', true),
+        'http://127.0.0.1:54321'
+      );
+    END IF;
+    
+    IF admin_api_key IS NULL THEN
+      admin_api_key := COALESCE(
+        current_setting('app.settings.admin_api_key', true),
+        ''
+      );
+    END IF;
+    
+    -- Build worker URL
+    worker_url := supabase_url || '/functions/v1/worker';
+    
+    -- Build request body
+    request_body := json_build_object('job_id', NEW.id)::TEXT;
+    
+    -- Only attempt to spawn if we have credentials
+    IF admin_api_key IS NOT NULL AND admin_api_key != '' THEN
+      -- Make async HTTP request to worker function
+      PERFORM extensions.http_post(
+        url := worker_url,
+        body := request_body::JSONB,
+        headers := json_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || admin_api_key
+        )::JSONB
+      );
+      
+      -- Update spawn timestamp and reset flag
+      NEW.worker_spawned_at := now();
+      NEW.needs_worker := false;
+      
+      RAISE LOG 'supasaasy: Spawned worker for job %', NEW.id;
+    ELSE
+      RAISE WARNING 'supasaasy: Cannot spawn worker - admin_api_key not configured';
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create trigger for auto-spawning workers (idempotent)
+DO $$
+BEGIN
+  -- Drop existing trigger if it exists (wrapped to suppress NOTICE)
+  IF EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'spawn_worker_on_job_change'
+  ) THEN
+    DROP TRIGGER spawn_worker_on_job_change ON supasaasy.sync_jobs;
+  END IF;
+  
+  -- Create the trigger
+  CREATE TRIGGER spawn_worker_on_job_change
+    BEFORE INSERT OR UPDATE OF needs_worker ON supasaasy.sync_jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION supasaasy.spawn_worker();
+END $$;
+
+COMMENT ON FUNCTION supasaasy.spawn_worker() IS 'Automatically spawns worker Edge Function when needs_worker flag is set';
 `;
 
 // =============================================================================

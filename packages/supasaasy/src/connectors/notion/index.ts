@@ -53,6 +53,7 @@ const SUPPORTED_RESOURCES: SupportedResource[] = [
     description: 'Notion data source properties (schema)',
     supportsIncrementalSync: false, // Synced with data sources
     supportsWebhooks: false, // Synced via data source webhooks
+    syncedWithParent: 'data_source',
   },
   {
     resourceType: 'page',

@@ -7,7 +7,12 @@
  */
 
 import type { AppConfig, SupaSaaSyConfig, SyncOptions, SyncResult } from '../types/index.ts';
-import { getSyncState, updateSyncState } from '../db/index.ts';
+import {
+  createJobTasks,
+  createSyncJob,
+  getSyncState,
+  updateSyncState,
+} from '../db/index.ts';
 import {
   type Connector,
   getAppConfig,
@@ -32,6 +37,8 @@ interface SyncRequest {
   app_key: string;
   mode?: SyncMode;
   resource_types?: string[];
+  /** If true, run sync immediately instead of creating a job (for small datasets) */
+  immediate?: boolean;
 }
 
 interface CollectionSyncResult {
@@ -53,6 +60,16 @@ interface SyncResponse {
   total_deleted: number;
   total_errors: number;
   duration_ms: number;
+}
+
+interface JobSyncResponse {
+  success: boolean;
+  job_id: string;
+  app_key: string;
+  mode: SyncMode;
+  status: string;
+  total_tasks: number;
+  resource_types: string[];
 }
 
 // =============================================================================
@@ -399,6 +416,80 @@ async function syncApp(
 }
 
 // =============================================================================
+// Job-Based Sync Operations
+// =============================================================================
+
+/**
+ * Create a sync job with tasks.
+ * Each task represents one resource type to sync.
+ * Workers poll the database for pending tasks and process them completely.
+ * Returns the job ID and task information.
+ */
+async function createSyncJobWithTasks(
+  appConfig: AppConfig,
+  mode: SyncMode,
+  _config: SupaSaaSyConfig,
+  resourceTypes: string[] | undefined,
+): Promise<JobSyncResponse> {
+  const connector = await getConnector(appConfig.connector);
+  if (!connector) {
+    throw new Error(`Connector not found: ${appConfig.connector}`);
+  }
+
+  // Get supported resources from connector metadata
+  const supportedResources = connector.metadata.supportedResources;
+
+  // Filter to requested resource types if specified, excluding nested resources
+  // (nested resources have syncedWithParent set and are synced as part of their parent)
+  const resourcesToSync = resourceTypes
+    ? supportedResources.filter((r) =>
+      resourceTypes.includes(r.resourceType) && !r.syncedWithParent
+    )
+    : supportedResources.filter((r) => !r.syncedWithParent);
+
+  if (resourcesToSync.length === 0) {
+    throw new Error('No resources to sync');
+  }
+
+  const resourceTypesToSync = resourcesToSync.map((r) => r.resourceType);
+
+  // Create the sync job
+  const { data: job, error: jobError } = await createSyncJob({
+    app_key: appConfig.app_key,
+    mode,
+    resource_types: resourceTypesToSync,
+  });
+
+  if (jobError || !job) {
+    throw new Error(`Failed to create sync job: ${jobError?.message || 'Unknown error'}`);
+  }
+
+  console.log(`Created sync job ${job.id} for app ${appConfig.app_key}`);
+
+  // Create one task per resource type
+  const { error: tasksError } = await createJobTasks(job.id, resourceTypesToSync);
+
+  if (tasksError) {
+    throw new Error(`Failed to create job tasks: ${tasksError.message}`);
+  }
+
+  console.log(`Created ${resourceTypesToSync.length} tasks for job ${job.id}: ${resourceTypesToSync.join(', ')}`);
+
+  // Job starts as 'pending' - workers will update to 'processing' when they start
+  // Note: Workers poll the database for pending tasks and process them automatically
+
+  return {
+    success: true,
+    job_id: job.id,
+    app_key: appConfig.app_key,
+    mode,
+    status: 'pending',
+    total_tasks: resourceTypesToSync.length,
+    resource_types: resourceTypesToSync,
+  };
+}
+
+// =============================================================================
 // Handler Factory
 // =============================================================================
 
@@ -482,8 +573,9 @@ export function createSyncHandler(
       const appKey = requestBody.app_key;
       const mode: SyncMode = requestBody.mode || 'incremental';
       const resourceTypes = requestBody.resource_types;
+      const immediate = requestBody.immediate || false;
 
-      console.log(`Starting ${mode} sync for app_key: ${appKey}`);
+      console.log(`Starting ${mode} sync for app_key: ${appKey} (immediate: ${immediate})`);
 
       // Look up app configuration
       const appConfig = getAppConfig(appKey, config);
@@ -491,18 +583,42 @@ export function createSyncHandler(
         return errorResponse(`Unknown app_key: ${appKey}`, 404);
       }
 
-      // Perform sync
-      const result = await syncApp(appConfig, mode, config, resourceTypes);
+      // Decide whether to run immediately or create a job
+      if (immediate) {
+        // Run sync immediately (synchronous, for small datasets)
+        console.log(`Running immediate sync for ${appKey}`);
+        const result = await syncApp(appConfig, mode, config, resourceTypes);
 
-      const duration = Date.now() - startTime;
-      console.log(
-        `Sync completed for ${appKey}: created=${result.total_created}, updated=${result.total_updated}, deleted=${result.total_deleted}, errors=${result.total_errors}, duration=${duration}ms`,
-      );
+        const duration = Date.now() - startTime;
+        console.log(
+          `Sync completed for ${appKey}: created=${result.total_created}, updated=${result.total_updated}, deleted=${result.total_deleted}, errors=${result.total_errors}, duration=${duration}ms`,
+        );
 
-      return successResponse({
-        ...result,
-        duration_ms: duration,
-      });
+        return successResponse({
+          ...result,
+          duration_ms: duration,
+        });
+      } else {
+        // Create a job with tasks (asynchronous, for large datasets)
+        // Workers poll the database for pending tasks and process them
+        console.log(`Creating sync job for ${appKey}`);
+        const jobResult = await createSyncJobWithTasks(
+          appConfig,
+          mode,
+          config,
+          resourceTypes,
+        );
+
+        const duration = Date.now() - startTime;
+        console.log(
+          `Sync job created for ${appKey}: job_id=${jobResult.job_id}, tasks=${jobResult.total_tasks}, duration=${duration}ms`,
+        );
+
+        return jsonResponse(
+          jobResult as unknown as Record<string, unknown>,
+          200,
+        );
+      }
     } catch (error) {
       // Log detailed error server-side only; return generic message to client
       const errorMessage = error instanceof Error ? error.message : String(error);
