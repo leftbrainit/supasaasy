@@ -81,6 +81,7 @@ export {
 
 export type {
   AppConfig,
+  AuthConfig,
   ConnectorMetadata,
   EntityRow,
   NormalizedEntity,
@@ -93,6 +94,7 @@ export type {
   SyncResult,
   SyncSchedule,
   WebhookEventType,
+  WebhookLoggingConfig,
   WebhookPayload,
   WebhookVerificationResult,
 } from './src/types/index.ts';

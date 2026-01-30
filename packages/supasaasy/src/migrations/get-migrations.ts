@@ -427,6 +427,134 @@ COMMENT ON FUNCTION supasaasy.spawn_worker() IS 'Automatically spawns worker Edg
 `;
 
 // =============================================================================
+// Authorized Users Table SQL
+// =============================================================================
+
+const USERS_TABLE_SQL = `
+-- =============================================================================
+-- SupaSaaSy Authorized Users Table
+-- =============================================================================
+-- This table manages which users are authorized to access SupaSaaSy data.
+-- Only users listed here can query SupaSaaSy tables when RLS is enabled.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS supasaasy.users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE supasaasy.users IS 'Authorized users who can access SupaSaaSy data';
+COMMENT ON COLUMN supasaasy.users.user_id IS 'References auth.users(id) - the Supabase Auth user';
+COMMENT ON COLUMN supasaasy.users.created_at IS 'When the user was granted access';
+
+-- Foreign key to auth.users with cascade delete
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'users_user_id_fkey'
+  ) THEN
+    ALTER TABLE supasaasy.users
+    ADD CONSTRAINT users_user_id_fkey
+    FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+-- Index for efficient RLS policy lookups
+CREATE INDEX IF NOT EXISTS idx_users_user_id ON supasaasy.users (user_id);
+
+-- Grant permissions (service_role manages this table)
+GRANT SELECT ON supasaasy.users TO authenticated;
+GRANT ALL ON supasaasy.users TO service_role;
+`;
+
+// =============================================================================
+// Row Level Security Policies SQL
+// =============================================================================
+
+const RLS_POLICIES_SQL = `
+-- =============================================================================
+-- SupaSaaSy Row Level Security Policies
+-- =============================================================================
+-- These policies restrict table access to users listed in supasaasy.users.
+-- Service role bypasses RLS automatically for backend operations.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on entities table
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.entities ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_entities_select_policy" ON supasaasy.entities;
+CREATE POLICY "supasaasy_entities_select_policy"
+  ON supasaasy.entities
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IN (SELECT user_id FROM supasaasy.users));
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on sync_state table
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.sync_state ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_sync_state_select_policy" ON supasaasy.sync_state;
+CREATE POLICY "supasaasy_sync_state_select_policy"
+  ON supasaasy.sync_state
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IN (SELECT user_id FROM supasaasy.users));
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on webhook_logs table
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.webhook_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_webhook_logs_select_policy" ON supasaasy.webhook_logs;
+CREATE POLICY "supasaasy_webhook_logs_select_policy"
+  ON supasaasy.webhook_logs
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IN (SELECT user_id FROM supasaasy.users));
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on sync_jobs table
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.sync_jobs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_sync_jobs_select_policy" ON supasaasy.sync_jobs;
+CREATE POLICY "supasaasy_sync_jobs_select_policy"
+  ON supasaasy.sync_jobs
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IN (SELECT user_id FROM supasaasy.users));
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on sync_job_tasks table
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.sync_job_tasks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_sync_job_tasks_select_policy" ON supasaasy.sync_job_tasks;
+CREATE POLICY "supasaasy_sync_job_tasks_select_policy"
+  ON supasaasy.sync_job_tasks
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() IN (SELECT user_id FROM supasaasy.users));
+
+-- -----------------------------------------------------------------------------
+-- Enable RLS on users table (users can only see their own entry)
+-- -----------------------------------------------------------------------------
+ALTER TABLE supasaasy.users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "supasaasy_users_select_policy" ON supasaasy.users;
+CREATE POLICY "supasaasy_users_select_policy"
+  ON supasaasy.users
+  FOR SELECT
+  TO authenticated
+  USING (auth.uid() = user_id);
+`;
+
+// =============================================================================
 // Migration Generation
 // =============================================================================
 
@@ -480,6 +608,9 @@ export async function getMigrations(
 ): Promise<string> {
   const { includeHeader = true, version = '1.0.0' } = options;
 
+  // Auth is enabled by default (when not specified)
+  const authEnabled = config.auth?.enabled !== false;
+
   const parts: string[] = [];
 
   // Add header if requested
@@ -488,6 +619,7 @@ export async function getMigrations(
 -- SupaSaaSy Migration
 -- Version: ${version}
 -- Generated: ${new Date().toISOString()}
+-- Auth/RLS: ${authEnabled ? 'enabled' : 'disabled'}
 -- ============================================================================
 -- This migration file was generated by @supasaasy/core getMigrations().
 -- It includes the core schema and connector-specific migrations.
@@ -498,6 +630,12 @@ export async function getMigrations(
 
   // Add core schema
   parts.push(CORE_SCHEMA_SQL);
+
+  // Add users table and RLS policies when auth is enabled
+  if (authEnabled) {
+    parts.push(USERS_TABLE_SQL);
+    parts.push(RLS_POLICIES_SQL);
+  }
 
   // Collect unique connectors from config
   const connectorNames = new Set(config.apps.map((app) => app.connector));
