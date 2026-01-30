@@ -14,7 +14,8 @@
 -- ============================================================================
 -- View for Notion data sources (tables within databases)
 
-CREATE OR REPLACE VIEW supasaasy.notion_data_sources AS
+CREATE OR REPLACE VIEW supasaasy.notion_data_sources
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -48,7 +49,8 @@ COMMENT ON VIEW supasaasy.notion_data_sources IS 'Convenience view for Notion da
 -- ============================================================================
 -- View for Notion data source properties (schema definition)
 
-CREATE OR REPLACE VIEW supasaasy.notion_data_source_properties AS
+CREATE OR REPLACE VIEW supasaasy.notion_data_source_properties
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -71,7 +73,8 @@ COMMENT ON VIEW supasaasy.notion_data_source_properties IS 'Convenience view for
 -- ============================================================================
 -- View for Notion pages (database rows/items)
 
-CREATE OR REPLACE VIEW supasaasy.notion_pages AS
+CREATE OR REPLACE VIEW supasaasy.notion_pages
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -111,7 +114,8 @@ COMMENT ON VIEW supasaasy.notion_pages IS 'Convenience view for Notion pages wit
 -- ============================================================================
 -- View for Notion workspace users (people and bots)
 
-CREATE OR REPLACE VIEW supasaasy.notion_users AS
+CREATE OR REPLACE VIEW supasaasy.notion_users
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
