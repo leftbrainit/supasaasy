@@ -41,7 +41,8 @@ COMMENT ON FUNCTION supasaasy.parse_intercom_timestamp(text) IS 'Parse Intercom 
 -- Companies View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.intercom_companies AS
+CREATE OR REPLACE VIEW supasaasy.intercom_companies
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -72,7 +73,8 @@ COMMENT ON VIEW supasaasy.intercom_companies IS 'Convenience view for Intercom c
 -- Contacts View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.intercom_contacts AS
+CREATE OR REPLACE VIEW supasaasy.intercom_contacts
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -114,7 +116,8 @@ COMMENT ON VIEW supasaasy.intercom_contacts IS 'Convenience view for Intercom co
 -- Admins View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.intercom_admins AS
+CREATE OR REPLACE VIEW supasaasy.intercom_admins
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -139,7 +142,8 @@ COMMENT ON VIEW supasaasy.intercom_admins IS 'Convenience view for Intercom admi
 -- Conversations View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.intercom_conversations AS
+CREATE OR REPLACE VIEW supasaasy.intercom_conversations
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -178,7 +182,8 @@ COMMENT ON VIEW supasaasy.intercom_conversations IS 'Convenience view for Interc
 -- Conversation Parts View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.intercom_conversation_parts AS
+CREATE OR REPLACE VIEW supasaasy.intercom_conversation_parts
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,

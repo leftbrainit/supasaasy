@@ -13,7 +13,8 @@
 -- Customers View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_customers AS
+CREATE OR REPLACE VIEW supasaasy.stripe_customers
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -40,7 +41,8 @@ COMMENT ON VIEW supasaasy.stripe_customers IS 'Convenience view for Stripe custo
 -- Products View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_products AS
+CREATE OR REPLACE VIEW supasaasy.stripe_products
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -68,7 +70,8 @@ COMMENT ON VIEW supasaasy.stripe_products IS 'Convenience view for Stripe produc
 -- Prices View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_prices AS
+CREATE OR REPLACE VIEW supasaasy.stripe_prices
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -100,7 +103,8 @@ COMMENT ON VIEW supasaasy.stripe_prices IS 'Convenience view for Stripe prices w
 -- Plans View (Legacy)
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_plans AS
+CREATE OR REPLACE VIEW supasaasy.stripe_plans
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -130,7 +134,8 @@ COMMENT ON VIEW supasaasy.stripe_plans IS 'Convenience view for Stripe plans (le
 -- Subscriptions View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_subscriptions AS
+CREATE OR REPLACE VIEW supasaasy.stripe_subscriptions
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,
@@ -163,7 +168,8 @@ COMMENT ON VIEW supasaasy.stripe_subscriptions IS 'Convenience view for Stripe s
 -- Subscription Items View
 -- ============================================================================
 
-CREATE OR REPLACE VIEW supasaasy.stripe_subscription_items AS
+CREATE OR REPLACE VIEW supasaasy.stripe_subscription_items
+WITH (security_invoker = true) AS
 SELECT
     e.id,
     e.external_id,

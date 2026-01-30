@@ -486,7 +486,17 @@ const RLS_POLICIES_SQL = `
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.entities ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_entities_select_policy" ON supasaasy.entities;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'entities'
+    AND policyname = 'supasaasy_entities_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_entities_select_policy" ON supasaasy.entities;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_entities_select_policy"
   ON supasaasy.entities
   FOR SELECT
@@ -498,7 +508,17 @@ CREATE POLICY "supasaasy_entities_select_policy"
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.sync_state ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_sync_state_select_policy" ON supasaasy.sync_state;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'sync_state'
+    AND policyname = 'supasaasy_sync_state_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_sync_state_select_policy" ON supasaasy.sync_state;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_sync_state_select_policy"
   ON supasaasy.sync_state
   FOR SELECT
@@ -510,7 +530,17 @@ CREATE POLICY "supasaasy_sync_state_select_policy"
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.webhook_logs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_webhook_logs_select_policy" ON supasaasy.webhook_logs;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'webhook_logs'
+    AND policyname = 'supasaasy_webhook_logs_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_webhook_logs_select_policy" ON supasaasy.webhook_logs;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_webhook_logs_select_policy"
   ON supasaasy.webhook_logs
   FOR SELECT
@@ -522,7 +552,17 @@ CREATE POLICY "supasaasy_webhook_logs_select_policy"
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.sync_jobs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_sync_jobs_select_policy" ON supasaasy.sync_jobs;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'sync_jobs'
+    AND policyname = 'supasaasy_sync_jobs_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_sync_jobs_select_policy" ON supasaasy.sync_jobs;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_sync_jobs_select_policy"
   ON supasaasy.sync_jobs
   FOR SELECT
@@ -534,7 +574,17 @@ CREATE POLICY "supasaasy_sync_jobs_select_policy"
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.sync_job_tasks ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_sync_job_tasks_select_policy" ON supasaasy.sync_job_tasks;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'sync_job_tasks'
+    AND policyname = 'supasaasy_sync_job_tasks_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_sync_job_tasks_select_policy" ON supasaasy.sync_job_tasks;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_sync_job_tasks_select_policy"
   ON supasaasy.sync_job_tasks
   FOR SELECT
@@ -546,7 +596,17 @@ CREATE POLICY "supasaasy_sync_job_tasks_select_policy"
 -- -----------------------------------------------------------------------------
 ALTER TABLE supasaasy.users ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "supasaasy_users_select_policy" ON supasaasy.users;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'supasaasy' AND tablename = 'users'
+    AND policyname = 'supasaasy_users_select_policy'
+  ) THEN
+    DROP POLICY "supasaasy_users_select_policy" ON supasaasy.users;
+  END IF;
+END $$;
+
 CREATE POLICY "supasaasy_users_select_policy"
   ON supasaasy.users
   FOR SELECT
