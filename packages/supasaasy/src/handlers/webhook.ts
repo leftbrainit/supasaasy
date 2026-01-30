@@ -20,6 +20,7 @@ import {
   type WebhookLogData,
 } from '../db/index.ts';
 import { getAppConfig, getConnector, setConfig } from '../connectors/index.ts';
+import { debugLog, isDebugEnabled } from '../connectors/utils.ts';
 
 // Import connectors to ensure they register themselves
 import '../connectors/stripe/index.ts';
@@ -264,10 +265,19 @@ async function processWebhookEvent(
   appConfig: AppConfig,
   _config: SupaSaaSyConfig,
 ): Promise<{ action: string; error?: Error }> {
+  debugLog('webhook', 'Processing webhook event', {
+    eventType: event.eventType,
+    resourceType: event.resourceType,
+    externalId: event.externalId,
+    originalEventType: event.originalEventType,
+    hasEntity: entity !== null,
+  });
+
   // For delete events, we don't need entity data
   if (event.eventType === 'delete') {
     const connector = await getConnector(appConfig.connector);
     if (!connector) {
+      debugLog('webhook', 'Connector not found for delete event');
       return { action: 'error', error: new Error('Connector not found') };
     }
 
@@ -277,6 +287,12 @@ async function processWebhookEvent(
     );
     const collectionKey = resource?.collectionKey ?? event.resourceType;
 
+    debugLog('webhook', 'Deleting entity', {
+      appKey: appConfig.app_key,
+      collectionKey,
+      externalId: event.externalId,
+    });
+
     const result = await deleteEntity(
       appConfig.app_key,
       collectionKey,
@@ -284,14 +300,17 @@ async function processWebhookEvent(
     );
 
     if (result.error) {
+      debugLog('webhook', 'Delete failed', { error: result.error.message });
       return { action: 'delete', error: result.error };
     }
 
+    debugLog('webhook', 'Delete succeeded', { count: result.count });
     return { action: 'delete' };
   }
 
   // For create, update, archive events, we need entity data
   if (!entity) {
+    debugLog('webhook', 'No entity data extracted, skipping');
     return { action: 'skip', error: new Error('No entity data extracted') };
   }
 
@@ -302,11 +321,21 @@ async function processWebhookEvent(
     upsertData.archived_at = event.timestamp.toISOString();
   }
 
+  debugLog('webhook', 'Upserting entity', {
+    appKey: upsertData.app_key,
+    collectionKey: upsertData.collection_key,
+    externalId: upsertData.external_id,
+    eventType: event.eventType,
+  });
+
   const result = await upsertEntity(upsertData);
 
   if (result.error) {
+    debugLog('webhook', 'Upsert failed', { error: result.error.message });
     return { action: event.eventType, error: result.error };
   }
+
+  debugLog('webhook', 'Upsert succeeded', { created: result.created });
 
   return {
     action: event.eventType,
@@ -322,10 +351,19 @@ async function processWebhookEntities(
   appConfig: AppConfig,
   _config: SupaSaaSyConfig,
 ): Promise<{ action: string; count: number; error?: Error }> {
+  debugLog('webhook', 'Processing webhook event with multiple entities', {
+    eventType: event.eventType,
+    resourceType: event.resourceType,
+    externalId: event.externalId,
+    originalEventType: event.originalEventType,
+    entityCount: entities.length,
+  });
+
   // For delete events, we don't need entity data
   if (event.eventType === 'delete') {
     const connector = await getConnector(appConfig.connector);
     if (!connector) {
+      debugLog('webhook', 'Connector not found for delete event');
       return { action: 'error', count: 0, error: new Error('Connector not found') };
     }
 
@@ -335,6 +373,12 @@ async function processWebhookEntities(
     );
     const collectionKey = resource?.collectionKey ?? event.resourceType;
 
+    debugLog('webhook', 'Deleting entity', {
+      appKey: appConfig.app_key,
+      collectionKey,
+      externalId: event.externalId,
+    });
+
     const result = await deleteEntity(
       appConfig.app_key,
       collectionKey,
@@ -342,14 +386,17 @@ async function processWebhookEntities(
     );
 
     if (result.error) {
+      debugLog('webhook', 'Delete failed', { error: result.error.message });
       return { action: 'delete', count: 0, error: result.error };
     }
 
+    debugLog('webhook', 'Delete succeeded', { count: result.count });
     return { action: 'delete', count: 1 };
   }
 
   // For create, update, archive events, we need entity data
   if (entities.length === 0) {
+    debugLog('webhook', 'No entity data extracted, skipping');
     return { action: 'skip', count: 0, error: new Error('No entity data extracted') };
   }
 
@@ -363,12 +410,21 @@ async function processWebhookEntities(
     return data;
   });
 
+  debugLog('webhook', 'Batch upserting entities', {
+    count: upsertDataArray.length,
+    externalIds: upsertDataArray.map((e) => e.external_id),
+    collectionKeys: [...new Set(upsertDataArray.map((e) => e.collection_key))],
+  });
+
   // Batch upsert all entities
   const result = await upsertEntities(upsertDataArray);
 
   if (result.error) {
+    debugLog('webhook', 'Batch upsert failed', { error: result.error.message });
     return { action: event.eventType, count: 0, error: result.error };
   }
+
+  debugLog('webhook', 'Batch upsert succeeded', { count: entities.length });
 
   return {
     action: event.eventType,
@@ -405,6 +461,12 @@ export function createWebhookHandler(
     const url = new URL(req.url);
     let appKey: string | undefined;
     let requestBody: Record<string, unknown> | undefined;
+
+    debugLog('webhook', 'Webhook request received', {
+      method: req.method,
+      path: url.pathname,
+      debugEnabled: isDebugEnabled(),
+    });
 
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
@@ -460,6 +522,7 @@ export function createWebhookHandler(
     const rateLimit = checkRateLimit(rateLimitKey, 100, 60000);
     if (!rateLimit.allowed) {
       const responseBody = { error: 'Too many requests' };
+      debugLog('webhook', 'Rate limit exceeded', { rateLimitKey });
       logWebhook(
         config,
         req,
@@ -476,6 +539,7 @@ export function createWebhookHandler(
       // Extract app_key from URL path
       appKey = extractAppKey(url) ?? undefined;
       if (!appKey) {
+        debugLog('webhook', 'Missing app_key in URL', { path: url.pathname });
         const responseBody = { error: 'Invalid webhook URL: missing app_key' };
         logWebhook(
           config,
@@ -491,6 +555,7 @@ export function createWebhookHandler(
 
       // Validate app_key format
       if (!isValidAppKey(appKey)) {
+        debugLog('webhook', 'Invalid app_key format', { appKey });
         const responseBody = { error: 'Invalid app_key format' };
         logWebhook(
           config,
@@ -506,10 +571,13 @@ export function createWebhookHandler(
 
       console.log(`Processing webhook for app_key: ${appKey}`);
 
+      debugLog('webhook', 'Processing webhook', { appKey });
+
       // Look up app configuration
       const appConfig = getAppConfig(appKey, config);
       if (!appConfig) {
         console.error(`No configuration found for app_key: ${appKey}`);
+        debugLog('webhook', 'Unknown app_key', { appKey });
         const responseBody = { error: 'Unknown app_key' };
         logWebhook(
           config,
@@ -523,10 +591,16 @@ export function createWebhookHandler(
         return errorResponse('Unknown app_key', 404);
       }
 
+      debugLog('webhook', 'App config found', {
+        appKey: appConfig.app_key,
+        connector: appConfig.connector,
+      });
+
       // Get the connector for this provider
       const connector = await getConnector(appConfig.connector);
       if (!connector) {
         console.error(`No connector found for provider: ${appConfig.connector}`);
+        debugLog('webhook', 'Connector not available', { connector: appConfig.connector });
         const responseBody = { error: 'Connector not available' };
         logWebhook(
           config,
@@ -540,11 +614,20 @@ export function createWebhookHandler(
         return errorResponse('Connector not available', 500);
       }
 
+      debugLog('webhook', 'Connector retrieved', {
+        connectorName: connector.metadata.name,
+      });
+
       // Verify webhook signature BEFORE parsing payload
       // This prevents malicious payload inspection attacks
+      debugLog('webhook', 'Verifying webhook signature');
       const verificationResult = await connector.verifyWebhook(req, appConfig);
       if (!verificationResult.valid) {
         console.error(`Webhook verification failed: ${verificationResult.reason}`);
+        debugLog('webhook', 'Webhook verification failed', {
+          reason: verificationResult.reason,
+          // Never log signature or secret values
+        });
         const responseBody = { error: verificationResult.reason || 'Webhook verification failed' };
         logWebhook(
           config,
@@ -561,6 +644,8 @@ export function createWebhookHandler(
         );
       }
 
+      debugLog('webhook', 'Webhook verification succeeded');
+
       // Store request body for logging (after verification)
       if (typeof verificationResult.payload === 'object' && verificationResult.payload !== null) {
         requestBody = verificationResult.payload as Record<string, unknown>;
@@ -576,13 +661,28 @@ export function createWebhookHandler(
         `Webhook event: ${event.originalEventType} -> ${event.eventType} for ${event.resourceType}:${event.externalId}`,
       );
 
+      debugLog('webhook', 'Webhook event parsed', {
+        originalEventType: event.originalEventType,
+        eventType: event.eventType,
+        resourceType: event.resourceType,
+        externalId: event.externalId,
+        timestamp: event.timestamp.toISOString(),
+      });
+
       // Extract and normalize entity data
       // Use extractEntities if available (for nested resources like subscription items)
       // Otherwise fall back to extractEntity for single entity
       if (connector.extractEntities) {
+        debugLog('webhook', 'Extracting multiple entities');
         const entities = await connector.extractEntities(event, appConfig);
 
         console.log(`Extracted ${entities.length} entity(ies) from webhook`);
+
+        debugLog('webhook', 'Entities extracted', {
+          count: entities.length,
+          externalIds: entities.map((e) => e.externalId),
+          collectionKeys: [...new Set(entities.map((e) => e.collectionKey))],
+        });
 
         // Process all entities
         const result = await processWebhookEntities(event, entities, appConfig, config);
@@ -590,6 +690,9 @@ export function createWebhookHandler(
         if (result.error) {
           // Log detailed error server-side only; return generic message to client
           console.error(`Error processing webhook: ${result.error.message}`);
+          debugLog('webhook', 'Webhook processing failed', {
+            error: result.error.message,
+          });
           const responseBody = { error: 'Internal server error' };
           logWebhook(
             config,
@@ -607,6 +710,14 @@ export function createWebhookHandler(
         console.log(
           `Webhook processed successfully: ${result.action} ${result.count} entity(ies) for ${event.resourceType}:${event.externalId}`,
         );
+
+        debugLog('webhook', 'Webhook processed successfully', {
+          action: result.action,
+          entityCount: result.count,
+          resourceType: event.resourceType,
+          externalId: event.externalId,
+          durationMs: Date.now() - startTime,
+        });
 
         const responseBody = {
           success: true,
@@ -635,7 +746,14 @@ export function createWebhookHandler(
       }
 
       // Fallback to single entity extraction for connectors without extractEntities
+      debugLog('webhook', 'Extracting single entity');
       const entity = await connector.extractEntity(event, appConfig);
+
+      debugLog('webhook', 'Entity extracted', {
+        hasEntity: entity !== null,
+        externalId: entity?.externalId,
+        collectionKey: entity?.collectionKey,
+      });
 
       // Process the event (upsert, delete, or archive)
       const result = await processWebhookEvent(event, entity, appConfig, config);
@@ -643,6 +761,9 @@ export function createWebhookHandler(
       if (result.error) {
         // Log detailed error server-side only; return generic message to client
         console.error(`Error processing webhook: ${result.error.message}`);
+        debugLog('webhook', 'Webhook processing failed', {
+          error: result.error.message,
+        });
         const responseBody = { error: 'Internal server error' };
         logWebhook(
           config,
@@ -660,6 +781,13 @@ export function createWebhookHandler(
       console.log(
         `Webhook processed successfully: ${result.action} for ${event.resourceType}:${event.externalId}`,
       );
+
+      debugLog('webhook', 'Webhook processed successfully', {
+        action: result.action,
+        resourceType: event.resourceType,
+        externalId: event.externalId,
+        durationMs: Date.now() - startTime,
+      });
 
       const responseBody = {
         success: true,
@@ -686,6 +814,10 @@ export function createWebhookHandler(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Unexpected error processing webhook: ${errorMessage}`);
+      debugLog('webhook', 'Webhook failed with unexpected error', {
+        error: errorMessage,
+        appKey,
+      });
       const responseBody = { error: 'Internal server error' };
       logWebhook(
         config,

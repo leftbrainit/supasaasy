@@ -175,6 +175,52 @@ SELECT * FROM supasaasy.stripe_customers
 WHERE email = 'user@example.com';
 ```
 
+## Debug Mode
+
+Enable detailed debug logging by setting the `SUPASAASY_DEBUG` environment variable:
+
+```bash
+# Enable debug mode
+export SUPASAASY_DEBUG=true
+
+# Run sync with debug logging
+supabase functions serve sync
+```
+
+### What Gets Logged
+
+When debug mode is enabled, you'll see detailed logs for:
+
+- **Sync operations**: Page fetches, cursor values, entity counts, batch upserts
+- **Webhook processing**: Event parsing, verification results, entity extraction
+- **Database operations**: Upserts, deletes, sync state updates
+- **Worker processing**: Task claims, connector selection, job completion
+
+### Using Debug Utilities in Custom Code
+
+You can use the debug utilities in your own connector or handler code:
+
+```typescript
+import { debugLog, isDebugEnabled } from 'supasaasy';
+
+// Check if debug mode is enabled
+if (isDebugEnabled()) {
+  // Custom debug logic
+}
+
+// Log debug messages (only outputs when debug mode is enabled)
+debugLog('my-component', 'Processing item', { id: '123', status: 'active' });
+// Output: [2024-01-15T10:30:00.000Z] [SUPASAASY DEBUG] [my-component] Processing item { id: "123", status: "active" }
+```
+
+### Security
+
+Debug mode is designed to be safe for production use:
+
+- **No secrets logged**: API keys, webhook secrets, and signatures are never logged
+- **No full payloads**: Raw webhook bodies are not logged to avoid sensitive data exposure
+- **Disabled by default**: Debug mode is off unless explicitly enabled via environment variable
+
 ## License
 
 MIT

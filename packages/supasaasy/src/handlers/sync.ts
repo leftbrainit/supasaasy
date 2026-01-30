@@ -16,6 +16,7 @@ import {
   setConfig,
   supportsIncrementalSync,
 } from '../connectors/index.ts';
+import { debugLog, isDebugEnabled } from '../connectors/utils.ts';
 
 // Import connectors to ensure they register themselves
 import '../connectors/stripe/index.ts';
@@ -266,10 +267,21 @@ async function syncCollection(
 
   const syncStartTime = new Date();
 
+  debugLog('sync', 'Starting collection sync', {
+    collectionKey,
+    resourceType,
+    mode,
+    appKey: appConfig.app_key,
+    connector: appConfig.connector,
+    sinceDatetime: sinceDatetime?.toISOString(),
+  });
+
   try {
     let syncResult: SyncResult;
     const syncOptions: SyncOptions = {
       resourceTypes: [resourceType],
+      // Enable verbose logging when debug mode is enabled
+      verbose: isDebugEnabled(),
     };
 
     if (mode === 'incremental' && sinceDatetime && supportsIncrementalSync(connector)) {
@@ -277,6 +289,10 @@ async function syncCollection(
       console.log(
         `Running incremental sync for ${collectionKey} since ${sinceDatetime.toISOString()}`,
       );
+      debugLog('sync', 'Running incremental sync', {
+        collectionKey,
+        sinceDatetime: sinceDatetime.toISOString(),
+      });
       syncResult = await (connector as IncrementalConnector).incrementalSync(
         appConfig,
         sinceDatetime,
@@ -285,6 +301,14 @@ async function syncCollection(
     } else {
       // Full sync
       console.log(`Running full sync for ${collectionKey}`);
+      debugLog('sync', 'Running full sync', {
+        collectionKey,
+        reason: mode !== 'incremental'
+          ? 'full mode requested'
+          : !sinceDatetime
+          ? 'no since datetime'
+          : 'connector does not support incremental',
+      });
       syncResult = await connector.fullSync(appConfig, syncOptions);
     }
 
@@ -299,6 +323,16 @@ async function syncCollection(
       result.error_messages.push(...syncResult.errorMessages);
     }
 
+    debugLog('sync', 'Sync result received', {
+      collectionKey,
+      success: syncResult.success,
+      created: syncResult.created,
+      updated: syncResult.updated,
+      deleted: syncResult.deleted,
+      errors: syncResult.errors,
+      durationMs: syncResult.durationMs,
+    });
+
     // Update sync state on success (only if no fatal errors)
     if (syncResult.success) {
       const { error: stateError } = await updateSyncState(
@@ -311,11 +345,25 @@ async function syncCollection(
       if (stateError) {
         console.error(`Failed to update sync state: ${stateError.message}`);
         result.error_messages.push(`Sync state update failed: ${stateError.message}`);
+        debugLog('sync', 'Sync state update failed', {
+          collectionKey,
+          error: stateError.message,
+        });
+      } else {
+        debugLog('sync', 'Sync state updated', {
+          appKey: appConfig.app_key,
+          collectionKey,
+          lastSyncedAt: syncStartTime.toISOString(),
+        });
       }
     }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`Sync error for ${collectionKey}: ${errorMessage}`);
+    debugLog('sync', 'Collection sync failed with exception', {
+      collectionKey,
+      error: errorMessage,
+    });
     result.errors++;
     result.error_messages.push(errorMessage);
   }
@@ -332,10 +380,23 @@ async function syncApp(
   _config: SupaSaaSyConfig,
   resourceTypes?: string[],
 ): Promise<Omit<SyncResponse, 'duration_ms'>> {
+  debugLog('sync', 'Starting app sync', {
+    appKey: appConfig.app_key,
+    connector: appConfig.connector,
+    mode,
+    resourceTypes,
+  });
+
   const connector = await getConnector(appConfig.connector);
   if (!connector) {
+    debugLog('sync', 'Connector not found', { connector: appConfig.connector });
     throw new Error(`Connector not found: ${appConfig.connector}`);
   }
+
+  debugLog('sync', 'Connector retrieved', {
+    connectorName: connector.metadata.name,
+    supportedResources: connector.metadata.supportedResources.map((r) => r.resourceType),
+  });
 
   const collections: CollectionSyncResult[] = [];
   let totalCreated = 0;
@@ -351,6 +412,11 @@ async function syncApp(
     ? supportedResources.filter((r) => resourceTypes.includes(r.resourceType))
     : supportedResources;
 
+  debugLog('sync', 'Resources to sync determined', {
+    requested: resourceTypes,
+    syncing: resourcesToSync.map((r) => r.resourceType),
+  });
+
   for (const resource of resourcesToSync) {
     // Determine if we should do incremental sync
     let sinceDatetime: Date | undefined;
@@ -362,6 +428,11 @@ async function syncApp(
         console.log(
           `Resource ${resource.resourceType} does not support incremental sync, using full`,
         );
+        debugLog('sync', 'Resource does not support incremental sync', {
+          resourceType: resource.resourceType,
+          supportsIncrementalSync: resource.supportsIncrementalSync,
+          connectorSupportsIncremental: supportsIncrementalSync(connector),
+        });
         actualMode = 'full';
       } else {
         // Get last sync timestamp
@@ -375,8 +446,15 @@ async function syncApp(
           console.log(
             `Found sync state for ${resource.collectionKey}: ${sinceDatetime.toISOString()}`,
           );
+          debugLog('sync', 'Sync state found', {
+            collectionKey: resource.collectionKey,
+            lastSyncedAt: syncState.last_synced_at,
+          });
         } else {
           console.log(`No sync state for ${resource.collectionKey}, falling back to full sync`);
+          debugLog('sync', 'No sync state found, falling back to full sync', {
+            collectionKey: resource.collectionKey,
+          });
           actualMode = 'full';
         }
       }
@@ -397,6 +475,15 @@ async function syncApp(
     totalDeleted += result.deleted;
     totalErrors += result.errors;
   }
+
+  debugLog('sync', 'App sync completed', {
+    appKey: appConfig.app_key,
+    totalCollections: collections.length,
+    totalCreated,
+    totalUpdated,
+    totalDeleted,
+    totalErrors,
+  });
 
   return {
     success: totalErrors === 0,
@@ -426,8 +513,16 @@ async function createSyncJobWithTasks(
   _config: SupaSaaSyConfig,
   resourceTypes: string[] | undefined,
 ): Promise<JobSyncResponse> {
+  debugLog('sync', 'Creating sync job with tasks', {
+    appKey: appConfig.app_key,
+    connector: appConfig.connector,
+    mode,
+    resourceTypes,
+  });
+
   const connector = await getConnector(appConfig.connector);
   if (!connector) {
+    debugLog('sync', 'Connector not found', { connector: appConfig.connector });
     throw new Error(`Connector not found: ${appConfig.connector}`);
   }
 
@@ -442,7 +537,14 @@ async function createSyncJobWithTasks(
     )
     : supportedResources.filter((r) => !r.syncedWithParent);
 
+  debugLog('sync', 'Resources to sync determined', {
+    requested: resourceTypes,
+    syncing: resourcesToSync.map((r) => r.resourceType),
+    excluded: supportedResources.filter((r) => r.syncedWithParent).map((r) => r.resourceType),
+  });
+
   if (resourcesToSync.length === 0) {
+    debugLog('sync', 'No resources to sync');
     throw new Error('No resources to sync');
   }
 
@@ -456,15 +558,23 @@ async function createSyncJobWithTasks(
   });
 
   if (jobError || !job) {
+    debugLog('sync', 'Failed to create sync job', { error: jobError?.message });
     throw new Error(`Failed to create sync job: ${jobError?.message || 'Unknown error'}`);
   }
 
   console.log(`Created sync job ${job.id} for app ${appConfig.app_key}`);
 
+  debugLog('sync', 'Sync job created', {
+    jobId: job.id,
+    appKey: appConfig.app_key,
+    mode,
+  });
+
   // Create one task per resource type
   const { error: tasksError } = await createJobTasks(job.id, resourceTypesToSync);
 
   if (tasksError) {
+    debugLog('sync', 'Failed to create job tasks', { jobId: job.id, error: tasksError.message });
     throw new Error(`Failed to create job tasks: ${tasksError.message}`);
   }
 
@@ -473,6 +583,12 @@ async function createSyncJobWithTasks(
       resourceTypesToSync.join(', ')
     }`,
   );
+
+  debugLog('sync', 'Job tasks created', {
+    jobId: job.id,
+    taskCount: resourceTypesToSync.length,
+    resourceTypes: resourceTypesToSync,
+  });
 
   // Job starts as 'pending' - workers will update to 'processing' when they start
   // Note: Workers poll the database for pending tasks and process them automatically
@@ -530,14 +646,22 @@ export function createSyncHandler(
     const rateLimitKey = getRateLimitKey(req);
     const rateLimit = checkRateLimit(rateLimitKey, 10, 60000);
     if (!rateLimit.allowed) {
+      debugLog('sync', 'Rate limit exceeded', { rateLimitKey });
       return rateLimitResponse(rateLimit.retryAfter);
     }
 
     const startTime = Date.now();
 
+    debugLog('sync', 'Sync request received', {
+      method: req.method,
+      url: req.url,
+      debugEnabled: isDebugEnabled(),
+    });
+
     try {
       // Verify admin API key
       if (!verifyAdminApiKey(req)) {
+        debugLog('sync', 'Authentication failed');
         return errorResponse('Unauthorized: invalid or missing API key', 401);
       }
 
@@ -576,22 +700,45 @@ export function createSyncHandler(
 
       console.log(`Starting ${mode} sync for app_key: ${appKey} (immediate: ${immediate})`);
 
+      debugLog('sync', 'Sync request parsed', {
+        appKey,
+        mode,
+        resourceTypes,
+        immediate,
+      });
+
       // Look up app configuration
       const appConfig = getAppConfig(appKey, config);
       if (!appConfig) {
+        debugLog('sync', 'Unknown app_key', { appKey });
         return errorResponse(`Unknown app_key: ${appKey}`, 404);
       }
+
+      debugLog('sync', 'App config found', {
+        appKey: appConfig.app_key,
+        connector: appConfig.connector,
+      });
 
       // Decide whether to run immediately or create a job
       if (immediate) {
         // Run sync immediately (synchronous, for small datasets)
         console.log(`Running immediate sync for ${appKey}`);
+        debugLog('sync', 'Running immediate sync', { appKey, mode });
         const result = await syncApp(appConfig, mode, config, resourceTypes);
 
         const duration = Date.now() - startTime;
         console.log(
           `Sync completed for ${appKey}: created=${result.total_created}, updated=${result.total_updated}, deleted=${result.total_deleted}, errors=${result.total_errors}, duration=${duration}ms`,
         );
+
+        debugLog('sync', 'Immediate sync completed', {
+          appKey,
+          totalCreated: result.total_created,
+          totalUpdated: result.total_updated,
+          totalDeleted: result.total_deleted,
+          totalErrors: result.total_errors,
+          durationMs: duration,
+        });
 
         return successResponse({
           ...result,
@@ -601,6 +748,7 @@ export function createSyncHandler(
         // Create a job with tasks (asynchronous, for large datasets)
         // Workers poll the database for pending tasks and process them
         console.log(`Creating sync job for ${appKey}`);
+        debugLog('sync', 'Creating job-based sync', { appKey, mode });
         const jobResult = await createSyncJobWithTasks(
           appConfig,
           mode,
@@ -613,6 +761,13 @@ export function createSyncHandler(
           `Sync job created for ${appKey}: job_id=${jobResult.job_id}, tasks=${jobResult.total_tasks}, duration=${duration}ms`,
         );
 
+        debugLog('sync', 'Sync job response ready', {
+          jobId: jobResult.job_id,
+          appKey,
+          totalTasks: jobResult.total_tasks,
+          durationMs: duration,
+        });
+
         return jsonResponse(
           jobResult as unknown as Record<string, unknown>,
           200,
@@ -622,6 +777,7 @@ export function createSyncHandler(
       // Log detailed error server-side only; return generic message to client
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Unexpected error during sync: ${errorMessage}`);
+      debugLog('sync', 'Sync failed with unexpected error', { error: errorMessage });
       return errorResponse('Internal server error', 500);
     }
   };
