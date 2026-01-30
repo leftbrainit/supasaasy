@@ -36,7 +36,15 @@ export default defineConfig({
         webhook_secret_env: 'INTERCOM_WEBHOOK_SECRET',
       },
     },
-
+    {
+      app_key: 'intercom_prod',
+      name: 'Intercom Production',
+      connector: 'intercom',
+      config: {
+        api_key_env: 'INTERCOM_API_KEY_PROD',
+        webhook_secret_env: 'INTERCOM_WEBHOOK_SECRET_PROD',
+      },
+    },
     // ==========================================================================
     // Notion Configuration
     // ==========================================================================
