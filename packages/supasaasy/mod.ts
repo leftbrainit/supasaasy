@@ -189,15 +189,18 @@ export {
 
 export {
   buildCollectionKey,
+  type ConnectorLogger,
   createConnectorLogger,
   createNormalizedEntity,
   createTimer,
+  debugLog,
   detectArchivedAt,
   emptySyncResult,
   entityToRow,
   extractExternalId,
   failedSyncResult,
   getCollectionKey,
+  isDebugEnabled,
   type LogEntry,
   type LogLevel,
   mergeSyncResults,

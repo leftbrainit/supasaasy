@@ -6,6 +6,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { debugLog } from '../connectors/utils.ts';
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -120,6 +121,13 @@ export interface DeleteResult {
 export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult> {
   const client = getSupabaseClient();
 
+  debugLog('db', 'Upserting entity', {
+    appKey: data.app_key,
+    collectionKey: data.collection_key,
+    externalId: data.external_id,
+    hasCustomId: !!data.id,
+  });
+
   try {
     // First, try to get existing record to determine if this is create or update
     const { data: existing } = await client
@@ -131,6 +139,11 @@ export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult
       .maybeSingle();
 
     const isCreate = !existing;
+
+    debugLog('db', 'Entity lookup result', {
+      externalId: data.external_id,
+      exists: !isCreate,
+    });
 
     // Build the record, including id if provided
     const record: Record<string, unknown> = {
@@ -157,11 +170,24 @@ export async function upsertEntity(data: UpsertEntityData): Promise<UpsertResult
       .single();
 
     if (error) {
+      debugLog('db', 'Entity upsert failed', {
+        externalId: data.external_id,
+        error: error.message,
+      });
       return { data: null, error: new Error(error.message), created: false };
     }
 
+    debugLog('db', 'Entity upsert succeeded', {
+      externalId: data.external_id,
+      created: isCreate,
+    });
+
     return { data: result as Entity, error: null, created: isCreate };
   } catch (err) {
+    debugLog('db', 'Entity upsert exception', {
+      externalId: data.external_id,
+      error: (err as Error).message,
+    });
     return { data: null, error: err as Error, created: false };
   }
 }
@@ -176,10 +202,18 @@ export async function upsertEntities(
   entities: UpsertEntityData[],
 ): Promise<{ data: Entity[] | null; error: Error | null }> {
   if (entities.length === 0) {
+    debugLog('db', 'Skipping batch upsert - empty array');
     return { data: [], error: null };
   }
 
   const client = getSupabaseClient();
+
+  const collectionKeys = [...new Set(entities.map((e) => e.collection_key))];
+  debugLog('db', 'Batch upserting entities', {
+    count: entities.length,
+    collectionKeys,
+    externalIds: entities.map((e) => e.external_id),
+  });
 
   try {
     const records = entities.map((data) => {
@@ -208,11 +242,23 @@ export async function upsertEntities(
       .select();
 
     if (error) {
+      debugLog('db', 'Batch upsert failed', {
+        count: entities.length,
+        error: error.message,
+      });
       return { data: null, error: new Error(error.message) };
     }
 
+    debugLog('db', 'Batch upsert succeeded', {
+      count: result?.length ?? 0,
+    });
+
     return { data: result as Entity[], error: null };
   } catch (err) {
+    debugLog('db', 'Batch upsert exception', {
+      count: entities.length,
+      error: (err as Error).message,
+    });
     return { data: null, error: err as Error };
   }
 }
@@ -233,6 +279,12 @@ export async function deleteEntity(
 ): Promise<DeleteResult> {
   const client = getSupabaseClient();
 
+  debugLog('db', 'Deleting entity', {
+    appKey: app_key,
+    collectionKey: collection_key,
+    externalId: external_id,
+  });
+
   try {
     const { error, count } = await client
       .from('entities')
@@ -242,11 +294,24 @@ export async function deleteEntity(
       .eq('external_id', external_id);
 
     if (error) {
+      debugLog('db', 'Entity delete failed', {
+        externalId: external_id,
+        error: error.message,
+      });
       return { count: 0, error: new Error(error.message) };
     }
 
+    debugLog('db', 'Entity delete succeeded', {
+      externalId: external_id,
+      count: count ?? 0,
+    });
+
     return { count: count ?? 0, error: null };
   } catch (err) {
+    debugLog('db', 'Entity delete exception', {
+      externalId: external_id,
+      error: (err as Error).message,
+    });
     return { count: 0, error: err as Error };
   }
 }
@@ -467,6 +532,13 @@ export async function updateSyncState(
 ): Promise<{ data: SyncState | null; error: Error | null }> {
   const client = getSupabaseClient();
 
+  debugLog('db', 'Updating sync state', {
+    appKey: app_key,
+    collectionKey: collection_key,
+    lastSyncedAt: last_synced_at.toISOString(),
+    hasMetadata: !!metadata,
+  });
+
   try {
     const { data, error } = await client
       .from('sync_state')
@@ -485,11 +557,26 @@ export async function updateSyncState(
       .single();
 
     if (error) {
+      debugLog('db', 'Sync state update failed', {
+        appKey: app_key,
+        collectionKey: collection_key,
+        error: error.message,
+      });
       return { data: null, error: new Error(error.message) };
     }
 
+    debugLog('db', 'Sync state update succeeded', {
+      appKey: app_key,
+      collectionKey: collection_key,
+    });
+
     return { data: data as SyncState, error: null };
   } catch (err) {
+    debugLog('db', 'Sync state update exception', {
+      appKey: app_key,
+      collectionKey: collection_key,
+      error: (err as Error).message,
+    });
     return { data: null, error: err as Error };
   }
 }
@@ -752,6 +839,13 @@ export async function updateJobStatus(
 ): Promise<{ data: SyncJob | null; error: Error | null }> {
   const client = getSupabaseClient();
 
+  debugLog('db', 'Updating job status', {
+    jobId,
+    ...updates,
+    started_at: updates.started_at?.toISOString(),
+    completed_at: updates.completed_at?.toISOString(),
+  });
+
   try {
     const record: Record<string, unknown> = {};
 
@@ -776,11 +870,21 @@ export async function updateJobStatus(
       .single();
 
     if (error) {
+      debugLog('db', 'Job status update failed', {
+        jobId,
+        error: error.message,
+      });
       return { data: null, error: new Error(error.message) };
     }
 
+    debugLog('db', 'Job status update succeeded', { jobId });
+
     return { data: data as SyncJob, error: null };
   } catch (err) {
+    debugLog('db', 'Job status update exception', {
+      jobId,
+      error: (err as Error).message,
+    });
     return { data: null, error: err as Error };
   }
 }
@@ -913,6 +1017,14 @@ export async function updateTaskStatus(
 ): Promise<{ data: SyncJobTask | null; error: Error | null }> {
   const client = getSupabaseClient();
 
+  debugLog('db', 'Updating task status', {
+    taskId,
+    status,
+    entityCount,
+    hasError: !!errorMessage,
+    cursor,
+  });
+
   try {
     const updates: Record<string, unknown> = {
       status,
@@ -940,11 +1052,21 @@ export async function updateTaskStatus(
       .single();
 
     if (error) {
+      debugLog('db', 'Task status update failed', {
+        taskId,
+        error: error.message,
+      });
       return { data: null, error: new Error(error.message) };
     }
 
+    debugLog('db', 'Task status update succeeded', { taskId, status });
+
     return { data: data as SyncJobTask, error: null };
   } catch (err) {
+    debugLog('db', 'Task status update exception', {
+      taskId,
+      error: (err as Error).message,
+    });
     return { data: null, error: err as Error };
   }
 }

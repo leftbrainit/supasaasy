@@ -7,6 +7,69 @@
 import type { EntityRow, NormalizedEntity, SupportedResource, SyncResult } from '../types/index.ts';
 
 // =============================================================================
+// Debug Mode Utilities
+// =============================================================================
+
+/**
+ * Check if debug mode is enabled via environment variable.
+ * Debug mode is enabled when SUPASAASY_DEBUG is set to "true".
+ *
+ * @returns true if debug mode is enabled, false otherwise
+ *
+ * @example
+ * ```typescript
+ * import { isDebugEnabled } from '@supasaasy/core';
+ *
+ * if (isDebugEnabled()) {
+ *   console.log('Custom debug info:', myData);
+ * }
+ * ```
+ */
+export function isDebugEnabled(): boolean {
+  try {
+    return Deno.env.get('SUPASAASY_DEBUG') === 'true';
+  } catch {
+    // Handle environments where Deno.env is not available
+    return false;
+  }
+}
+
+/**
+ * Log a debug message when debug mode is enabled.
+ * Messages are prefixed with [SUPASAASY DEBUG] for easy filtering.
+ *
+ * @param context The context/component emitting the log (e.g., 'worker', 'sync', 'webhook')
+ * @param message The debug message
+ * @param data Optional structured data to include in the log
+ *
+ * @example
+ * ```typescript
+ * import { debugLog } from '@supasaasy/core';
+ *
+ * debugLog('sync', 'Processing resource', { resourceType: 'customer', count: 42 });
+ * // Output: [SUPASAASY DEBUG] [sync] Processing resource { resourceType: "customer", count: 42 }
+ * ```
+ */
+export function debugLog(
+  context: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
+  if (!isDebugEnabled()) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [SUPASAASY DEBUG] [${context}]`;
+
+  if (data) {
+    console.debug(`${prefix} ${message}`, data);
+  } else {
+    console.debug(`${prefix} ${message}`);
+  }
+}
+
+// =============================================================================
 // Entity Normalization Helpers
 // =============================================================================
 
@@ -357,14 +420,43 @@ export async function paginatedSync<T>(
 
   const log = config.logger ?? createConnectorLogger(config.connectorName);
 
+  // Enable verbose mode if debug mode is enabled (unless explicitly disabled)
+  const verboseEnabled = config.verbose ?? isDebugEnabled();
+
+  debugLog('paginatedSync', 'Starting paginated sync', {
+    connectorName: config.connectorName,
+    resourceType: config.resourceType,
+    collectionKey: config.collectionKey,
+    appKey: config.appKey,
+    pageSize: config.pageSize,
+    limit: config.limit,
+    startingCursor: cursor,
+    existingIdsCount: config.existingIds?.size,
+    dryRun: config.dryRun,
+    verbose: verboseEnabled,
+  });
+
   try {
     let hasMore = true;
 
     while (hasMore) {
       page++;
 
+      debugLog('paginatedSync', `Fetching page ${page}`, {
+        resourceType: config.resourceType,
+        cursor: cursor ?? '(none)',
+        fetchedSoFar: seenIds.size,
+      });
+
       // Fetch a page from the API
       const response = await config.listPage(cursor);
+
+      debugLog('paginatedSync', `Received page ${page}`, {
+        resourceType: config.resourceType,
+        itemCount: response.data.length,
+        hasMore: response.hasMore,
+        nextCursor: response.nextCursor ?? '(none)',
+      });
 
       // Process items in this page
       const entities: NormalizedEntity[] = [];
@@ -376,7 +468,7 @@ export async function paginatedSync<T>(
         const entity = config.normalize(item);
         entities.push(entity);
 
-        if (config.verbose) {
+        if (verboseEnabled) {
           log.debug(
             'sync',
             `Processing ${config.resourceType} ${id}`,
@@ -395,14 +487,29 @@ export async function paginatedSync<T>(
           );
           result.created += entities.length;
         } else {
+          debugLog('paginatedSync', `Upserting batch of ${entities.length} entities`, {
+            resourceType: config.resourceType,
+            collectionKey: config.collectionKey,
+            externalIds: entities.map((e) => e.externalId),
+          });
+
           const { error } = await config.upsertBatch(entities);
           if (error) {
             result.errors++;
             result.errorMessages = result.errorMessages || [];
             result.errorMessages.push(error.message);
             log.error('sync', `Failed to upsert ${config.resourceType}(s): ${error.message}`);
+            debugLog('paginatedSync', 'Batch upsert failed', {
+              resourceType: config.resourceType,
+              error: error.message,
+            });
           } else {
             result.created += entities.length;
+            debugLog('paginatedSync', 'Batch upsert succeeded', {
+              resourceType: config.resourceType,
+              count: entities.length,
+              cumulativeCount: result.created,
+            });
           }
         }
       }
@@ -424,14 +531,31 @@ export async function paginatedSync<T>(
       // Check limit
       if (config.limit && seenIds.size >= config.limit) {
         log.info('sync', `Reached limit of ${config.limit} ${config.resourceType}(s)`);
+        debugLog('paginatedSync', 'Reached sync limit', {
+          resourceType: config.resourceType,
+          limit: config.limit,
+          fetched: seenIds.size,
+        });
         break;
       }
     }
 
     // Detect deletions during full sync
     if (config.existingIds) {
+      debugLog('paginatedSync', 'Starting deletion detection', {
+        resourceType: config.resourceType,
+        existingCount: config.existingIds.size,
+        seenCount: seenIds.size,
+      });
+
+      let deletionCount = 0;
       for (const existingId of config.existingIds) {
         if (!seenIds.has(existingId)) {
+          debugLog('paginatedSync', `Detected deletion: ${existingId}`, {
+            resourceType: config.resourceType,
+            externalId: existingId,
+          });
+
           if (config.dryRun) {
             log.info(
               'sync',
@@ -443,12 +567,22 @@ export async function paginatedSync<T>(
             const { error } = await config.deleteEntity(existingId);
             if (error) {
               result.errors++;
+              debugLog('paginatedSync', `Deletion failed: ${existingId}`, {
+                resourceType: config.resourceType,
+                error: error.message,
+              });
             } else {
               result.deleted++;
+              deletionCount++;
             }
           }
         }
       }
+
+      debugLog('paginatedSync', 'Deletion detection complete', {
+        resourceType: config.resourceType,
+        deletedCount: deletionCount,
+      });
     }
 
     result.durationMs = timer.elapsed();
@@ -458,6 +592,16 @@ export async function paginatedSync<T>(
       `Completed ${config.resourceType} sync: ${result.created} upserted, ${result.deleted} deleted`,
       { created: result.created, deleted: result.deleted, durationMs: result.durationMs },
     );
+
+    debugLog('paginatedSync', 'Paginated sync complete', {
+      resourceType: config.resourceType,
+      collectionKey: config.collectionKey,
+      totalPages: page,
+      created: result.created,
+      deleted: result.deleted,
+      errors: result.errors,
+      durationMs: result.durationMs,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     result.success = false;
@@ -465,6 +609,13 @@ export async function paginatedSync<T>(
     result.errorMessages = result.errorMessages || [];
     result.errorMessages.push(message);
     log.error('sync', `${config.resourceType} sync failed: ${message}`);
+
+    debugLog('paginatedSync', 'Paginated sync failed with error', {
+      resourceType: config.resourceType,
+      error: message,
+      pagesCompleted: page,
+      entitiesProcessed: seenIds.size,
+    });
   }
 
   return result;

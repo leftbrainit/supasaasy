@@ -35,6 +35,7 @@ import {
   setConfig,
   supportsIncrementalSync,
 } from '../connectors/index.ts';
+import { debugLog, isDebugEnabled } from '../connectors/utils.ts';
 
 // Import connectors to ensure they register themselves
 import '../connectors/stripe/index.ts';
@@ -263,11 +264,26 @@ async function processResourceSync(
   workerState.entityCount = task.entity_count || 0;
   workerState.isProcessing = true;
 
+  debugLog('worker', 'Starting resource sync', {
+    taskId: task.id,
+    jobId: task.job_id,
+    resourceType: task.resource_type,
+    mode,
+    connector: appConfig.connector,
+    appKey: appConfig.app_key,
+    sinceDatetime: sinceDatetime?.toISOString(),
+    cursor: task.cursor,
+  });
+
   // Set up heartbeat interval
   const heartbeatInterval = setInterval(async () => {
     if (workerState.isProcessing && !workerState.shutdownRequested) {
       try {
         await updateTaskHeartbeat(task.id, undefined, workerState.entityCount);
+        debugLog('worker', 'Heartbeat updated', {
+          taskId: task.id,
+          entityCount: workerState.entityCount,
+        });
       } catch (err) {
         console.error('Heartbeat update failed:', err);
       }
@@ -279,7 +295,16 @@ async function processResourceSync(
       resourceTypes: [task.resource_type],
       // If task has a cursor, pass it for resumption (future enhancement)
       cursor: task.cursor || undefined,
+      // Enable verbose logging when debug mode is enabled
+      verbose: isDebugEnabled(),
     };
+
+    debugLog('worker', 'Sync options configured', {
+      taskId: task.id,
+      resourceTypes: syncOptions.resourceTypes,
+      cursor: syncOptions.cursor,
+      verbose: syncOptions.verbose,
+    });
 
     let syncResult: SyncResult;
 
@@ -288,6 +313,11 @@ async function processResourceSync(
       console.log(
         `Processing incremental sync for resource ${task.resource_type} since ${sinceDatetime.toISOString()}`,
       );
+      debugLog('worker', 'Running incremental sync', {
+        taskId: task.id,
+        resourceType: task.resource_type,
+        sinceDatetime: sinceDatetime.toISOString(),
+      });
       syncResult = await (connector as IncrementalConnector).incrementalSync(
         appConfig,
         sinceDatetime,
@@ -296,11 +326,31 @@ async function processResourceSync(
     } else {
       // Full sync
       console.log(`Processing full sync for resource ${task.resource_type}`);
+      debugLog('worker', 'Running full sync', {
+        taskId: task.id,
+        resourceType: task.resource_type,
+        reason: mode !== 'incremental'
+          ? 'full mode requested'
+          : !sinceDatetime
+          ? 'no since datetime'
+          : 'connector does not support incremental',
+      });
       syncResult = await connector.fullSync(appConfig, syncOptions);
     }
 
     const entitiesProcessed = syncResult.created + syncResult.updated + syncResult.deleted;
     workerState.entityCount = entitiesProcessed;
+
+    debugLog('worker', 'Sync completed', {
+      taskId: task.id,
+      resourceType: task.resource_type,
+      success: syncResult.success,
+      created: syncResult.created,
+      updated: syncResult.updated,
+      deleted: syncResult.deleted,
+      errors: syncResult.errors,
+      durationMs: syncResult.durationMs,
+    });
 
     if (!syncResult.success && syncResult.errorMessages?.length) {
       return {
@@ -317,6 +367,11 @@ async function processResourceSync(
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`Task processing error for ${task.resource_type}: ${errorMessage}`);
+    debugLog('worker', 'Sync failed with exception', {
+      taskId: task.id,
+      resourceType: task.resource_type,
+      error: errorMessage,
+    });
     return {
       entitiesProcessed: workerState.entityCount,
       error: errorMessage,
@@ -374,10 +429,17 @@ async function processTasksForJob(
   const processedJobs = new Set<string>();
   let shutdownReason: string | undefined;
 
+  debugLog('worker', 'Starting task processing loop', {
+    targetJobId,
+    maxTasks,
+    maxRuntimeMs: MAX_WORKER_RUNTIME_MS,
+  });
+
   while (true) {
     // Check if shutdown was requested
     if (workerState.shutdownRequested) {
       shutdownReason = 'shutdown_requested';
+      debugLog('worker', 'Shutdown requested, exiting loop');
       break;
     }
 
@@ -385,6 +447,11 @@ async function processTasksForJob(
     if (Date.now() - startTime > MAX_WORKER_RUNTIME_MS) {
       console.log('Worker approaching time limit, requesting continuation');
       shutdownReason = 'timeout';
+
+      debugLog('worker', 'Runtime limit exceeded', {
+        elapsedMs: Date.now() - startTime,
+        maxRuntimeMs: MAX_WORKER_RUNTIME_MS,
+      });
 
       // Request worker continuation for any active job
       if (targetJobId && !processedJobs.has(targetJobId)) {
@@ -398,14 +465,17 @@ async function processTasksForJob(
     if (maxTasks !== undefined && tasksProcessed >= maxTasks) {
       console.log(`Processed max tasks (${maxTasks}), exiting`);
       shutdownReason = 'max_tasks_reached';
+      debugLog('worker', 'Max tasks reached', { tasksProcessed, maxTasks });
       break;
     }
 
     // Try to claim a task for the target job (or any job if not specified)
+    debugLog('worker', 'Attempting to claim task', { targetJobId });
     const { data: task, error: claimError } = await claimTask(targetJobId);
 
     if (claimError) {
       console.error(`Error claiming task: ${claimError.message}`);
+      debugLog('worker', 'Task claim error', { error: claimError.message });
       await sleep(1000);
       continue;
     }
@@ -413,6 +483,7 @@ async function processTasksForJob(
     if (!task) {
       // No pending tasks available
       console.log('No pending tasks available');
+      debugLog('worker', 'No pending tasks available');
 
       // Check if target job is complete
       if (targetJobId && !processedJobs.has(targetJobId)) {
@@ -426,6 +497,12 @@ async function processTasksForJob(
       break; // Exit if no work available
     }
 
+    debugLog('worker', 'Task claimed', {
+      taskId: task.id,
+      jobId: task.job_id,
+      resourceType: task.resource_type,
+    });
+
     const jobId = task.job_id;
     workerState.currentJobId = jobId;
 
@@ -433,28 +510,51 @@ async function processTasksForJob(
     const { data: jobStatus } = await getJobStatus(jobId);
     if (!jobStatus) {
       console.error(`Job ${jobId} not found`);
+      debugLog('worker', 'Job not found', { jobId });
       await updateTaskStatus(task.id, 'failed', 0, `Job ${jobId} not found`);
       await sleep(100);
       continue;
     }
 
+    debugLog('worker', 'Job status retrieved', {
+      jobId,
+      appKey: jobStatus.app_key,
+      mode: jobStatus.mode,
+      status: jobStatus.status,
+      totalTasks: jobStatus.total_tasks,
+      completedTasks: jobStatus.completed_tasks,
+      failedTasks: jobStatus.failed_tasks,
+    });
+
     // Get app configuration
     const appConfig = getAppConfig(jobStatus.app_key, config);
     if (!appConfig) {
       console.error(`Unknown app_key: ${jobStatus.app_key}`);
+      debugLog('worker', 'Unknown app_key', { appKey: jobStatus.app_key });
       await updateTaskStatus(task.id, 'failed', 0, `Unknown app_key: ${jobStatus.app_key}`);
       await sleep(100);
       continue;
     }
 
+    debugLog('worker', 'App config found', {
+      appKey: appConfig.app_key,
+      connector: appConfig.connector,
+    });
+
     // Get connector
     const connector = await getConnector(appConfig.connector);
     if (!connector) {
       console.error(`Connector not found: ${appConfig.connector}`);
+      debugLog('worker', 'Connector not found', { connector: appConfig.connector });
       await updateTaskStatus(task.id, 'failed', 0, `Connector not found: ${appConfig.connector}`);
       await sleep(100);
       continue;
     }
+
+    debugLog('worker', 'Connector retrieved', {
+      connectorName: connector.metadata.name,
+      supportedResources: connector.metadata.supportedResources.map((r) => r.resourceType),
+    });
 
     // Verify the resource type is supported
     const resource = connector.metadata.supportedResources.find(
@@ -463,6 +563,10 @@ async function processTasksForJob(
 
     if (!resource) {
       console.error(`Resource type not supported: ${task.resource_type}`);
+      debugLog('worker', 'Resource type not supported', {
+        resourceType: task.resource_type,
+        supportedTypes: connector.metadata.supportedResources.map((r) => r.resourceType),
+      });
       await updateTaskStatus(
         task.id,
         'failed',
@@ -478,6 +582,10 @@ async function processTasksForJob(
       console.error(
         `Resource ${task.resource_type} is synced with ${resource.syncedWithParent}, not independently`,
       );
+      debugLog('worker', 'Resource is nested (synced with parent)', {
+        resourceType: task.resource_type,
+        parentType: resource.syncedWithParent,
+      });
       await updateTaskStatus(
         task.id,
         'failed',
@@ -490,6 +598,7 @@ async function processTasksForJob(
 
     // Update job status to processing if not already
     if (jobStatus.status === 'pending') {
+      debugLog('worker', 'Updating job status to processing', { jobId });
       await updateJobStatus(jobId, {
         status: 'processing',
         started_at: new Date(),
@@ -510,6 +619,16 @@ async function processTasksForJob(
       );
       if (syncState) {
         sinceDatetime = new Date(syncState.last_synced_at);
+        debugLog('worker', 'Retrieved sync state for incremental sync', {
+          appKey: appConfig.app_key,
+          collectionKey: resource.collectionKey,
+          lastSyncedAt: syncState.last_synced_at,
+        });
+      } else {
+        debugLog('worker', 'No sync state found, will use full sync', {
+          appKey: appConfig.app_key,
+          collectionKey: resource.collectionKey,
+        });
       }
     }
 
@@ -526,6 +645,7 @@ async function processTasksForJob(
     // Check if shutdown was requested during processing
     if (workerState.shutdownRequested) {
       shutdownReason = 'shutdown_during_task';
+      debugLog('worker', 'Shutdown requested during task processing');
       // Don't update task status - let the next worker continue
       await updateJobStatus(jobId, { needs_worker: true });
       break;
@@ -533,12 +653,23 @@ async function processTasksForJob(
 
     // Update task status
     if (result.error) {
+      debugLog('worker', 'Task failed', {
+        taskId: task.id,
+        resourceType: task.resource_type,
+        error: result.error,
+        entitiesProcessed: result.entitiesProcessed,
+      });
       await updateTaskStatus(task.id, 'failed', result.entitiesProcessed, result.error);
       await updateJobStatus(jobId, {
         failed_tasks: jobStatus.failed_tasks + 1,
         processed_entities: jobStatus.processed_entities + result.entitiesProcessed,
       });
     } else {
+      debugLog('worker', 'Task completed successfully', {
+        taskId: task.id,
+        resourceType: task.resource_type,
+        entitiesProcessed: result.entitiesProcessed,
+      });
       await updateTaskStatus(task.id, 'completed', result.entitiesProcessed);
       await updateJobStatus(jobId, {
         completed_tasks: jobStatus.completed_tasks + 1,
@@ -547,6 +678,10 @@ async function processTasksForJob(
 
       // Update sync state for this resource type so incremental sync knows when last sync happened
       await updateSyncState(appConfig.app_key, resource.collectionKey, new Date());
+      debugLog('worker', 'Sync state updated', {
+        appKey: appConfig.app_key,
+        collectionKey: resource.collectionKey,
+      });
     }
 
     tasksProcessed++;
@@ -557,11 +692,19 @@ async function processTasksForJob(
     if (isComplete && !processedJobs.has(jobId)) {
       jobsCompleted.push(jobId);
       processedJobs.add(jobId);
+      debugLog('worker', 'Job completed', { jobId });
     }
 
     // Small delay between tasks
     await sleep(100);
   }
+
+  debugLog('worker', 'Task processing loop finished', {
+    tasksProcessed,
+    jobsCompleted,
+    shutdownReason,
+    elapsedMs: Date.now() - startTime,
+  });
 
   return { tasksProcessed, jobsCompleted, shutdownReason };
 }
@@ -639,9 +782,16 @@ export function createWorkerHandler(
     workerState.isProcessing = false;
     workerState.shutdownRequested = false;
 
+    debugLog('worker', 'Worker request received', {
+      method: req.method,
+      url: req.url,
+      debugEnabled: isDebugEnabled(),
+    });
+
     try {
       // Verify admin API key
       if (!verifyAdminApiKey(req)) {
+        debugLog('worker', 'Authentication failed');
         return errorResponse('Unauthorized: invalid or missing API key', 401);
       }
 
@@ -673,6 +823,12 @@ export function createWorkerHandler(
         }`,
       );
 
+      debugLog('worker', 'Worker started', {
+        targetJobId,
+        maxTasks,
+        maxRuntimeMs: MAX_WORKER_RUNTIME_MS,
+      });
+
       // Process tasks
       const { tasksProcessed, jobsCompleted, shutdownReason } = await processTasksForJob(
         config,
@@ -689,6 +845,13 @@ export function createWorkerHandler(
         }`,
       );
 
+      debugLog('worker', 'Worker completed', {
+        tasksProcessed,
+        jobsCompleted,
+        durationMs: duration,
+        shutdownReason,
+      });
+
       return successResponse({
         success: true,
         tasks_processed: tasksProcessed,
@@ -699,6 +862,12 @@ export function createWorkerHandler(
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Unexpected error in worker: ${errorMessage}`);
+
+      debugLog('worker', 'Worker failed with unexpected error', {
+        error: errorMessage,
+        currentJobId: workerState.currentJobId,
+        currentTaskId: workerState.currentTaskId,
+      });
 
       // Request worker continuation if we have an active job
       if (workerState.currentJobId) {
