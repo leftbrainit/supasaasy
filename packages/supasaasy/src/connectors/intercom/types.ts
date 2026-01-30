@@ -130,6 +130,19 @@ export interface IntercomPaginatedResponse<T> {
 }
 
 /**
+ * Intercom Company list response (uses scroll-based pagination)
+ * Note: The Companies endpoint uses a different pagination strategy than other endpoints.
+ * It returns a scroll_param that must be passed to /companies/scroll for the next page.
+ */
+export interface IntercomCompanyListResponse {
+  type: 'company.list';
+  data: IntercomCompany[];
+  total_count?: number;
+  /** Scroll parameter for fetching the next page of results */
+  scroll_param?: string;
+}
+
+/**
  * Intercom conversation list response (different from standard pagination)
  */
 export interface IntercomConversationListResponse {

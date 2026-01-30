@@ -45,14 +45,14 @@ export async function syncCompanies(
 ): Promise<SyncResult> {
   const result = emptySyncResult();
   const timer = createTimer();
-  let cursor: string | undefined;
+  let scrollParam: string | undefined;
   const pageSize = options.pageSize || DEFAULT_PAGE_SIZE;
   const seenIds = new Set<string>();
 
   try {
     let hasMore = true;
     while (hasMore) {
-      const response = await client.listCompanies(cursor, pageSize);
+      const response = await client.listCompanies(scrollParam, pageSize);
 
       const entities: UpsertEntityData[] = [];
       for (const company of response.data) {
@@ -81,10 +81,11 @@ export async function syncCompanies(
         }
       }
 
-      // Check pagination
-      hasMore = response.pages?.next?.starting_after !== undefined;
+      // Check pagination - Companies use scroll-based pagination
+      // When scroll_param is present, there are more results; when absent, we've reached the end
+      hasMore = response.scroll_param !== undefined && response.data.length > 0;
       if (hasMore) {
-        cursor = response.pages?.next?.starting_after;
+        scrollParam = response.scroll_param;
       }
 
       // Check limit

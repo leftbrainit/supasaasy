@@ -11,7 +11,7 @@ import { createConnectorLogger } from '../utils.ts';
 import type {
   IntercomAdmin,
   IntercomAppConfig,
-  IntercomCompany,
+  IntercomCompanyListResponse,
   IntercomContact,
   IntercomConversation,
   IntercomConversationListResponse,
@@ -199,11 +199,15 @@ export interface IntercomClient {
   get<T>(path: string, params?: Record<string, string>): Promise<T>;
   /** Make a POST request to the Intercom API */
   post<T>(path: string, body: unknown): Promise<T>;
-  /** List companies with pagination */
+  /**
+   * List companies with scroll-based pagination.
+   * Note: Intercom's companies endpoint uses scroll pagination, not cursor-based.
+   * Pass scrollParam from previous response to get next page.
+   */
   listCompanies(
-    cursor?: string,
+    scrollParam?: string,
     perPage?: number,
-  ): Promise<IntercomPaginatedResponse<IntercomCompany>>;
+  ): Promise<IntercomCompanyListResponse>;
   /** List contacts with pagination */
   listContacts(
     cursor?: string,
@@ -295,14 +299,17 @@ export function createIntercomClient(appConfig: AppConfig): IntercomClient {
       return request<T>('POST', path, undefined, body);
     },
 
-    listCompanies(cursor?: string, perPage = DEFAULT_PAGE_SIZE) {
-      const params: Record<string, string> = {
-        per_page: String(perPage),
-      };
-      if (cursor) {
-        params.starting_after = cursor;
+    listCompanies(scrollParam?: string, perPage = DEFAULT_PAGE_SIZE) {
+      // Intercom companies use scroll-based pagination:
+      // - First request: GET /companies/scroll?per_page=N
+      // - Subsequent requests: GET /companies/scroll?scroll_param=X
+      const params: Record<string, string> = {};
+      if (scrollParam) {
+        params.scroll_param = scrollParam;
+      } else {
+        params.per_page = String(perPage);
       }
-      return request<IntercomPaginatedResponse<IntercomCompany>>('GET', '/companies', params);
+      return request<IntercomCompanyListResponse>('GET', '/companies/scroll', params);
     },
 
     listContacts(cursor?: string, perPage = DEFAULT_PAGE_SIZE) {
