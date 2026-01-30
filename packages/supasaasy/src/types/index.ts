@@ -65,6 +65,19 @@ export interface WebhookLoggingConfig {
 }
 
 /**
+ * Configuration for authentication and Row Level Security (RLS)
+ */
+export interface AuthConfig {
+  /**
+   * Whether to enable RLS policies on SupaSaaSy tables.
+   * When true, only users in the `supasaasy.users` table can access data.
+   * When false, all authenticated users can access data.
+   * Default: true
+   */
+  enabled: boolean;
+}
+
+/**
  * Root configuration for SupaSaaSy
  */
 export interface SupaSaaSyConfig {
@@ -74,6 +87,11 @@ export interface SupaSaaSyConfig {
   sync_schedules?: SyncSchedule[];
   /** Webhook logging configuration */
   webhook_logging?: WebhookLoggingConfig;
+  /**
+   * Authentication and RLS configuration.
+   * When enabled (default), RLS policies restrict access to users in `supasaasy.users`.
+   */
+  auth?: AuthConfig;
 }
 
 // =============================================================================

@@ -105,4 +105,31 @@ export default defineConfig({
   webhook_logging: {
     enabled: true, // Set to true to enable webhook logging
   },
+
+  // ==========================================================================
+  // Authentication & Row Level Security (RLS)
+  // ==========================================================================
+  // Controls access to SupaSaaSy tables via Postgres Row Level Security.
+  //
+  // When enabled (default):
+  // - A `supasaasy.users` table is created to manage authorized users
+  // - RLS policies restrict SELECT access to users in that table
+  // - Only users explicitly added to supasaasy.users can query data
+  // - service_role (Edge Functions) bypasses RLS for backend operations
+  //
+  // To grant a user access:
+  //   INSERT INTO supasaasy.users (user_id) VALUES ('uuid-from-auth-users');
+  //
+  // To revoke access:
+  //   DELETE FROM supasaasy.users WHERE user_id = 'uuid-from-auth-users';
+  //
+  // Set enabled: false to allow all authenticated users to access data.
+  //
+  auth: {
+    enabled: true,
+  },
+  // To disable RLS and allow all authenticated users:
+  // auth: {
+  //   enabled: false,
+  // },
 });

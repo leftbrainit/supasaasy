@@ -175,6 +175,72 @@ SELECT * FROM supasaasy.stripe_customers
 WHERE email = 'user@example.com';
 ```
 
+## Authentication & Authorization
+
+SupaSaaSy uses Postgres Row Level Security (RLS) to control access to synced data. By default, RLS is enabled and only users explicitly authorized in the `supasaasy.users` table can access data.
+
+### How It Works
+
+1. **RLS is enabled by default** on all SupaSaaSy tables
+2. **Authorized users** are managed via the `supasaasy.users` table
+3. **Service role** (Edge Functions) bypasses RLS for backend operations
+4. **Connector views** (e.g., `stripe_customers`) inherit RLS from the base `entities` table
+
+### Managing Authorized Users
+
+Add a user to grant access:
+
+```sql
+-- Grant access to a user (use their UUID from auth.users)
+INSERT INTO supasaasy.users (user_id)
+VALUES ('00000000-0000-0000-0000-000000000000');
+```
+
+Remove a user to revoke access:
+
+```sql
+-- Revoke access from a user
+DELETE FROM supasaasy.users
+WHERE user_id = '00000000-0000-0000-0000-000000000000';
+```
+
+List all authorized users:
+
+```sql
+-- View all authorized users with their grant timestamp
+SELECT user_id, created_at FROM supasaasy.users;
+```
+
+### Disabling RLS
+
+For simpler deployments where all authenticated users should have access, disable RLS in your configuration:
+
+```typescript
+// supasaasy.config.ts
+export default defineConfig({
+  apps: [/* ... */],
+  auth: {
+    enabled: false, // Disables RLS policies
+  },
+});
+```
+
+When `auth.enabled` is `false`:
+
+- No `supasaasy.users` table is created
+- RLS policies are not applied
+- All authenticated users can query all SupaSaaSy tables
+
+### The supasaasy.users Table
+
+| Column     | Type        | Description                                     |
+| ---------- | ----------- | ----------------------------------------------- |
+| id         | UUID        | Primary key (auto-generated)                    |
+| user_id    | UUID        | References `auth.users(id)`, cascades on delete |
+| created_at | TIMESTAMPTZ | When the user was granted access                |
+
+The foreign key cascade ensures that when a user is deleted from `auth.users`, their authorization is automatically removed.
+
 ## Debug Mode
 
 Enable detailed debug logging by setting the `SUPASAASY_DEBUG` environment variable:

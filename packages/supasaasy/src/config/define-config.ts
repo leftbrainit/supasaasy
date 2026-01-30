@@ -171,6 +171,23 @@ export function validateConfig(config: SupaSaaSyConfig): ConfigValidationResult 
     }
   }
 
+  // Validate auth if provided
+  if (config.auth !== undefined) {
+    if (typeof config.auth !== 'object' || config.auth === null) {
+      errors.push({
+        path: 'auth',
+        message: 'auth must be an object',
+      });
+    } else {
+      if (typeof config.auth.enabled !== 'boolean') {
+        errors.push({
+          path: 'auth.enabled',
+          message: 'enabled is required and must be a boolean',
+        });
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,
