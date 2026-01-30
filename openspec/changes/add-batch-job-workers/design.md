@@ -3,11 +3,13 @@
 ## Context
 
 Supabase Edge Functions run on Deno Deploy with strict resource limits:
+
 - **CPU time:** ~10 seconds CPU execution time
 - **Wall time:** ~50 seconds total execution time
 - **Memory:** ~512MB per function invocation
 
 Large sync operations (e.g., initial backfill of 10,000+ Stripe customers) exceed these limits, causing:
+
 - Incomplete syncs due to timeouts
 - Poor user experience with no progress visibility
 - Inability to resume failed syncs
@@ -18,6 +20,7 @@ The current sync handler processes all entities synchronously in a single reques
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Enable synchronization of arbitrarily large datasets within edge function constraints
 - Provide real-time visibility into sync progress
 - Support resumable syncs that survive transient failures
@@ -25,6 +28,7 @@ The current sync handler processes all entities synchronously in a single reques
 - Work correctly with all pagination styles (cursor-based, offset-based, etc.)
 
 **Non-Goals:**
+
 - Replace the existing incremental sync for small datasets (keep it fast for common case)
 - Implement distributed worker coordination beyond Supabase functions
 - Add complex scheduling/queueing systems (keep it simple)
@@ -38,6 +42,7 @@ The current sync handler processes all entities synchronously in a single reques
 **Decision:** Implement a job queue pattern where the sync endpoint creates one task per resource type, and workers process each task completely using the connector's natural pagination. Workers process tasks serially to stay within edge function limits.
 
 **Key insight:** Different APIs have different pagination styles and limits:
+
 - Stripe: Cursor-based, 100 records per page
 - Notion: Cursor-based, 100 records per page (max)
 - Intercom: Cursor-based, variable page sizes
@@ -45,6 +50,7 @@ The current sync handler processes all entities synchronously in a single reques
 Rather than pre-chunking with offsets (which doesn't work for cursor-based APIs), we let each connector handle its own pagination internally.
 
 **Flow:**
+
 1. Client calls `POST /sync` with `{ app_key: "stripe_main", mode: "full" }`
 2. Sync handler:
    - Creates a `sync_jobs` record with status `pending`
@@ -62,11 +68,13 @@ Rather than pre-chunking with offsets (which doesn't work for cursor-based APIs)
 6. Job completes when all tasks are processed
 
 **Alternatives considered:**
+
 - **Pre-chunking with offsets:** Doesn't work for cursor-based APIs like Notion
 - **Parallel workers:** Adds complexity; serial processing is simpler and sufficient
 - **HTTP-based worker spawning:** Failed due to Edge Runtime network isolation in local development
 
 **Rationale:** This approach is simpler and universally compatible:
+
 - Connectors already handle pagination correctly for their APIs
 - No need to know total entity counts upfront
 - No assumptions about page sizes or API limits
@@ -77,12 +85,14 @@ Rather than pre-chunking with offsets (which doesn't work for cursor-based APIs)
 **Decision:** Create one task per resource type (e.g., `customers`, `subscriptions`, `pages`). Each task represents a complete sync of that resource.
 
 **Rationale:**
+
 - Natural unit of work that maps to connector capabilities
 - Allows progress tracking at resource level
 - Failed tasks can be retried independently
 - No need to track pagination state in the database
 
 **Schema:**
+
 ```sql
 CREATE TABLE sync_jobs (
   id UUID PRIMARY KEY,
@@ -119,33 +129,34 @@ CREATE TABLE sync_job_tasks (
 **Decision:** Workers process tasks one at a time, checking elapsed time before claiming each new task to ensure graceful completion within the edge function time limit.
 
 **Flow:**
+
 ```typescript
 async function processTasks() {
   const startTime = Date.now();
   const MAX_RUNTIME_MS = 45000; // Leave 5s buffer before 50s limit
-  
+
   while (true) {
     // Check if we have time for another task
     if (Date.now() - startTime > MAX_RUNTIME_MS) {
       console.log('Approaching time limit, exiting gracefully');
       break;
     }
-    
+
     // Atomically claim next pending task
     const task = await claimTask(jobId);
     if (!task) break; // No more work
-    
+
     // Process entire resource using connector's pagination
     const result = await connector.fullSync(appConfig, {
-      resourceTypes: [task.resource_type]
+      resourceTypes: [task.resource_type],
     });
-    
+
     // Update task status
     await updateTaskStatus(task.id, result.success ? 'completed' : 'failed', {
       entity_count: result.created + result.updated,
-      error_message: result.errorMessages?.join('; ')
+      error_message: result.errorMessages?.join('; '),
     });
-    
+
     // Check if job is complete
     await checkJobCompletion(task.job_id);
   }
@@ -153,6 +164,7 @@ async function processTasks() {
 ```
 
 **Rationale:**
+
 - Simple serial processing avoids race conditions
 - Timeout awareness prevents hard timeouts mid-sync
 - Each task is a complete unit of work (no partial state to track)
@@ -163,6 +175,7 @@ async function processTasks() {
 **Decision:** Track progress at task granularity. Entity counts are recorded after each task completes.
 
 **Rationale:**
+
 - Simple aggregation: `completed_tasks / total_tasks` = progress %
 - Entity counts provide detail for completed resources
 - No need for estimated entity counts (which would be inaccurate anyway)
@@ -172,6 +185,7 @@ async function processTasks() {
 **Concern:** Some resources may have millions of entities, taking longer than the 50s edge function limit.
 
 **Mitigation strategies:**
+
 1. **Connector-level pagination:** Connectors already process entities in batches, upserting as they go. Even if the worker times out, partial progress is persisted.
 2. **Task retry:** If a task times out, it remains in `processing` status. A timeout mechanism (e.g., mark as `failed` after 5 minutes) allows retry.
 3. **Incremental sync:** For very large collections, use incremental sync mode which only fetches recent changes.
@@ -182,23 +196,28 @@ async function processTasks() {
 ## Risks / Trade-offs
 
 **Risk: Single resource exceeds time limit**
+
 - Mitigated by: Connector pagination persists progress incrementally
 - Mitigated by: sync_from filter to limit historical data
 - Future: Add cursor persistence for resumable task processing
 
 **Risk: Orphaned tasks if worker crashes**
+
 - Mitigated by: Task timeout mechanism (mark as `failed` after 5 minutes without update)
 - Recovery: Failed tasks can be retried manually
 
 **Risk: Increased database load from job/task updates**
+
 - Minimal impact: Only one update per task (not per page/entity)
 - Acceptable trade-off for enabling large syncs
 
 **Trade-off: Latency for small syncs**
+
 - Impact: Small syncs now have overhead for job creation
 - Mitigation: `immediate` mode flag falls back to synchronous processing
 
 **Trade-off: No parallel processing**
+
 - Impact: Slower than parallel workers for multi-resource syncs
 - Rationale: Simplicity over speed; serial processing is reliable and predictable
 - Future: Can add parallel workers later if needed
@@ -206,16 +225,19 @@ async function processTasks() {
 ## Migration Plan
 
 **Phase 1: Refactor database schema**
+
 - Replace `sync_job_chunks` with `sync_job_tasks` (simpler schema)
 - Update database helper functions
 - No breaking changes to existing sync behavior
 
 **Phase 2: Refactor handlers**
+
 - Update sync handler to create tasks instead of chunks
 - Update worker handler to process complete resource syncs
 - Update job-status handler for task-based metrics
 
 **Phase 3: Test and validate**
+
 - Test with Stripe (cursor-based, well-behaved)
 - Test with Notion (cursor-based, 100 record limit)
 - Test with various collection sizes

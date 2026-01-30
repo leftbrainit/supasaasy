@@ -102,6 +102,12 @@ export type {
 // =============================================================================
 
 export {
+  // Job-based sync utilities
+  claimTask,
+  cleanupOldJobs,
+  createJobTasks,
+  createSyncJob,
+  type CreateSyncJobData,
   deleteEntities,
   deleteEntity,
   type DeleteResult,
@@ -109,31 +115,25 @@ export {
   getEntity,
   getEntityExternalIds,
   getEntityExternalIdsCreatedAfter,
+  getJobStatus,
   getSupabaseClient,
   getSyncState,
   getSyncStates,
   resetClient,
-  type SyncState,
-  updateSyncState,
-  upsertEntities,
-  upsertEntity,
-  type UpsertEntityData,
-  type UpsertResult,
-  // Job-based sync utilities
-  claimTask,
-  cleanupOldJobs,
-  createJobTasks,
-  createSyncJob,
-  type CreateSyncJobData,
-  getJobStatus,
   type SyncJob,
   type SyncJobStatus,
   type SyncJobStatusWithStats,
   type SyncJobTask,
   type SyncJobTaskStatus,
+  type SyncState,
   updateJobStatus,
+  updateSyncState,
   updateTaskHeartbeat,
   updateTaskStatus,
+  upsertEntities,
+  upsertEntity,
+  type UpsertEntityData,
+  type UpsertResult,
 } from './src/db/index.ts';
 
 // =============================================================================

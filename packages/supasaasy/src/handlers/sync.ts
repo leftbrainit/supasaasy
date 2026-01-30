@@ -7,12 +7,7 @@
  */
 
 import type { AppConfig, SupaSaaSyConfig, SyncOptions, SyncResult } from '../types/index.ts';
-import {
-  createJobTasks,
-  createSyncJob,
-  getSyncState,
-  updateSyncState,
-} from '../db/index.ts';
+import { createJobTasks, createSyncJob, getSyncState, updateSyncState } from '../db/index.ts';
 import {
   type Connector,
   getAppConfig,
@@ -473,7 +468,11 @@ async function createSyncJobWithTasks(
     throw new Error(`Failed to create job tasks: ${tasksError.message}`);
   }
 
-  console.log(`Created ${resourceTypesToSync.length} tasks for job ${job.id}: ${resourceTypesToSync.join(', ')}`);
+  console.log(
+    `Created ${resourceTypesToSync.length} tasks for job ${job.id}: ${
+      resourceTypesToSync.join(', ')
+    }`,
+  );
 
   // Job starts as 'pending' - workers will update to 'processing' when they start
   // Note: Workers poll the database for pending tasks and process them automatically

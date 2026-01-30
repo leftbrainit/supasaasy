@@ -762,7 +762,9 @@ export async function updateJobStatus(
       record.processed_entities = updates.processed_entities;
     }
     if (updates.started_at !== undefined) record.started_at = updates.started_at.toISOString();
-    if (updates.completed_at !== undefined) record.completed_at = updates.completed_at.toISOString();
+    if (updates.completed_at !== undefined) {
+      record.completed_at = updates.completed_at.toISOString();
+    }
     if (updates.error_message !== undefined) record.error_message = updates.error_message;
     if (updates.needs_worker !== undefined) record.needs_worker = updates.needs_worker;
 
@@ -1036,7 +1038,9 @@ export async function getJobStatus(
 
     // Calculate progress percentage
     const progress_percentage = typedJob.total_tasks > 0
-      ? Math.round(((typedJob.completed_tasks + typedJob.failed_tasks) / typedJob.total_tasks) * 100)
+      ? Math.round(
+        ((typedJob.completed_tasks + typedJob.failed_tasks) / typedJob.total_tasks) * 100,
+      )
       : 0;
 
     const result: SyncJobStatusWithStats = {

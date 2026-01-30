@@ -165,11 +165,11 @@ curl -X POST http://127.0.0.1:54321/functions/v1/sync \
 
 ### Request Parameters
 
-| Parameter        | Type     | Required | Description                                      |
-| ---------------- | -------- | -------- | ------------------------------------------------ |
-| `app_key`        | string   | Yes      | The app key to sync                              |
-| `mode`           | string   | No       | `full` or `incremental` (default: `incremental`) |
-| `resource_types` | string[] | No       | Specific resources to sync                       |
+| Parameter        | Type     | Required | Description                                                        |
+| ---------------- | -------- | -------- | ------------------------------------------------------------------ |
+| `app_key`        | string   | Yes      | The app key to sync                                                |
+| `mode`           | string   | No       | `full` or `incremental` (default: `incremental`)                   |
+| `resource_types` | string[] | No       | Specific resources to sync                                         |
 | `immediate`      | boolean  | No       | Run sync immediately (default: `false`, uses job-based processing) |
 
 ### Job-Based Sync Processing
@@ -301,6 +301,7 @@ curl -X POST http://127.0.0.1:54321/functions/v1/worker \
 ```
 
 **How it works:**
+
 1. Sync handler creates job and tasks in database (one task per resource type)
 2. Worker polls database for pending tasks
 3. Worker atomically claims a task and processes the entire resource using connector's pagination

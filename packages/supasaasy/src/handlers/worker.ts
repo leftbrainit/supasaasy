@@ -668,7 +668,9 @@ export function createWorkerHandler(
       const maxTasks = requestBody.max_tasks;
 
       console.log(
-        `Worker started: ${targetJobId ? `job=${targetJobId}` : 'any job'}, max_tasks=${maxTasks || 'unlimited'}`,
+        `Worker started: ${targetJobId ? `job=${targetJobId}` : 'any job'}, max_tasks=${
+          maxTasks || 'unlimited'
+        }`,
       );
 
       // Process tasks
@@ -682,7 +684,9 @@ export function createWorkerHandler(
       const duration = Date.now() - startTime;
 
       console.log(
-        `Worker completed: tasks_processed=${tasksProcessed}, jobs_completed=${jobsCompleted.length}, duration=${duration}ms${shutdownReason ? `, reason=${shutdownReason}` : ''}`,
+        `Worker completed: tasks_processed=${tasksProcessed}, jobs_completed=${jobsCompleted.length}, duration=${duration}ms${
+          shutdownReason ? `, reason=${shutdownReason}` : ''
+        }`,
       );
 
       return successResponse({
